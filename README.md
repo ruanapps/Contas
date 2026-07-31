@@ -38,6 +38,7 @@ O app passa a se comportar como um aplicativo instalado, com ícone próprio e s
   - **Marcar como pago** reabre o mesmo formulário com valor pago = valor original e data de pagamento = hoje, ambos editáveis antes de confirmar.
 - **Cobrança recorrente**: ao marcar a caixa "Cobrança recorrente", o app gera automaticamente lançamentos mensais para os próximos 12 meses. Esse horizonte de 12 meses é mantido sempre à frente — a cada mês que passa, um novo lançamento é adicionado ao final da série. Ao desmarcar a recorrência de uma conta, o app pergunta se deseja excluir todas as cobranças futuras dessa série (mantendo a conta atual e as já pagas).
 - **Aba "Por Período"**: navegação mês a mês e criação de filtros personalizados (categoria, status, intervalo de datas) que ficam fixados como chips reutilizáveis.
+- **Categorias personalizáveis**: ao selecionar a categoria (no lançamento ou nos filtros), há a opção "+ Criar nova categoria...". Também é possível abrir "Gerenciar categorias" para excluir categorias que não usa mais — contas já lançadas mantêm o nome da categoria mesmo se ela for excluída da lista.
 
 ## Estrutura de arquivos
 

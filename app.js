@@ -6,6 +6,8 @@
 const STORAGE_KEY = 'contasPagar.contas';
 const SERIES_KEY = 'contasPagar.series';
 const FILTROS_KEY = 'contasPagar.filtros';
+const CATEGORIAS_KEY = 'contasPagar.categorias';
+const CATEGORIAS_PADRAO = ['Moradia', 'Contas fixas', 'Cartão de crédito', 'Transporte', 'Saúde', 'Educação', 'Alimentação', 'Lazer', 'Assinaturas', 'Impostos', 'Outros'];
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
@@ -34,11 +36,151 @@ function loadFiltros() {
 function saveFiltros(filtros) {
   localStorage.setItem(FILTROS_KEY, JSON.stringify(filtros));
 }
+function loadCategorias() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CATEGORIAS_KEY));
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch { /* ignora e usa padrão */ }
+  return [...CATEGORIAS_PADRAO];
+}
+function saveCategorias(cats) {
+  localStorage.setItem(CATEGORIAS_KEY, JSON.stringify(cats));
+}
 
 let contas = loadContas();
 let series = loadSeries();
 let filtros = loadFiltros();
+let categorias = loadCategorias();
 let filtroAtivoId = null;
+
+/* =========================================================
+   CATEGORIAS
+   ========================================================= */
+
+// Preenche um <select> com as categorias atuais, preservando a 1ª option
+// (placeholder) e adicionando "+ Criar nova categoria..." ao final.
+function popularSelectCategorias(selectEl) {
+  const placeholder = selectEl.options[0] ? selectEl.options[0].cloneNode(true) : null;
+  const valorAtual = selectEl.value;
+  selectEl.innerHTML = '';
+  if (placeholder) selectEl.appendChild(placeholder);
+  categorias.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = cat;
+    selectEl.appendChild(opt);
+  });
+  const novaOpt = document.createElement('option');
+  novaOpt.value = '__nova__';
+  novaOpt.textContent = '+ Criar nova categoria...';
+  selectEl.appendChild(novaOpt);
+  if (categorias.includes(valorAtual)) selectEl.value = valorAtual;
+}
+
+function refreshCategoriaSelects() {
+  popularSelectCategorias($('#fCategoria'));
+  popularSelectCategorias($('#ffCategoria'));
+}
+
+// Select que disparou o fluxo de "+ Criar nova categoria...", para já
+// deixá-la selecionada assim que for criada. Nulo quando o modal foi
+// aberto pelo link "Gerenciar categorias".
+let categoriaSelectAlvo = null;
+
+function tratarSelecaoCategoria(selectEl) {
+  if (selectEl.value === '__nova__') {
+    selectEl.value = '';
+    categoriaSelectAlvo = selectEl;
+    abrirModal('#modalCategorias');
+    setTimeout(() => $('#novaCategoriaInput').focus(), 50);
+  }
+}
+$('#fCategoria').addEventListener('change', () => tratarSelecaoCategoria($('#fCategoria')));
+$('#ffCategoria').addEventListener('change', () => tratarSelecaoCategoria($('#ffCategoria')));
+
+function renderCategoriasModal() {
+  const lista = $('#categoriasLista');
+  lista.innerHTML = '';
+  if (categorias.length === 0) {
+    const vazio = document.createElement('div');
+    vazio.className = 'categorias-vazio';
+    vazio.textContent = 'Nenhuma categoria cadastrada.';
+    lista.appendChild(vazio);
+    return;
+  }
+  categorias.forEach(cat => {
+    const row = document.createElement('div');
+    row.className = 'categoria-row';
+    const nome = document.createElement('span');
+    nome.textContent = cat;
+    const excluir = document.createElement('button');
+    excluir.type = 'button';
+    excluir.textContent = '×';
+    excluir.title = 'Excluir categoria';
+    excluir.addEventListener('click', () => confirmarExclusaoCategoria(cat));
+    row.appendChild(nome);
+    row.appendChild(excluir);
+    lista.appendChild(row);
+  });
+}
+
+function confirmarExclusaoCategoria(cat) {
+  confirmar(
+    `Excluir a categoria "${cat}"? Contas já lançadas mantêm o nome, mas ela não aparecerá mais na lista para novos lançamentos.`,
+    () => {
+      categorias = categorias.filter(c => c !== cat);
+      saveCategorias(categorias);
+      refreshCategoriaSelects();
+      renderCategoriasModal();
+      abrirModal('#modalCategorias');
+      toast('Categoria excluída');
+    },
+    () => {
+      abrirModal('#modalCategorias');
+    }
+  );
+}
+
+$('#btnGerenciarCategorias').addEventListener('click', () => {
+  categoriaSelectAlvo = null;
+  renderCategoriasModal();
+  abrirModal('#modalCategorias');
+});
+$('#btnGerenciarCategoriasFiltro').addEventListener('click', () => {
+  categoriaSelectAlvo = null;
+  renderCategoriasModal();
+  abrirModal('#modalCategorias');
+});
+
+$('#formNovaCategoria').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = $('#novaCategoriaInput');
+  const nome = input.value.trim();
+  if (!nome) return;
+
+  const jaExiste = categorias.some(c => c.toLowerCase() === nome.toLowerCase());
+  if (jaExiste) {
+    toast('Essa categoria já existe');
+    return;
+  }
+
+  categorias.push(nome);
+  saveCategorias(categorias);
+  refreshCategoriaSelects();
+  input.value = '';
+
+  if (categoriaSelectAlvo) {
+    categoriaSelectAlvo.value = nome;
+    const alvo = categoriaSelectAlvo;
+    categoriaSelectAlvo = null;
+    fecharTodosModais();
+    alvo.focus();
+    toast('Categoria criada e selecionada');
+  } else {
+    renderCategoriasModal();
+    toast('Categoria adicionada');
+  }
+});
 
 /* ---------- Utilidades de data/valor ---------- */
 function hojeISO() {
@@ -463,8 +605,20 @@ function abrirFormNovo() {
   abrirModal('#modalForm');
 }
 
+function garantirOpcaoCategoria(selectEl, cat) {
+  if (!cat) return;
+  const existe = Array.from(selectEl.options).some(o => o.value === cat);
+  if (!existe) {
+    const opt = document.createElement('option');
+    opt.value = cat;
+    opt.textContent = `${cat} (excluída)`;
+    selectEl.insertBefore(opt, selectEl.options[1] || null);
+  }
+}
+
 function preencherFormComConta(conta) {
   $('#fId').value = conta.id;
+  garantirOpcaoCategoria($('#fCategoria'), conta.categoria);
   $('#fCategoria').value = conta.categoria;
   $('#fNome').value = conta.nome;
   $('#fValorOriginal').value = conta.valorOriginal;
@@ -522,34 +676,43 @@ $('#fRecorrente').addEventListener('change', (e) => {
   }
 });
 
-function perguntarExclusaoFuturas(conta) {
-  $('#confirmTexto').textContent = 'Deseja excluir todas as cobranças futuras desta conta recorrente? A conta atual será mantida.';
+// Helper genérico de confirmação sim/não. Fecha os modais e dispara o
+// callback correspondente; quem chamar decide se reabre algum modal depois.
+function confirmar(texto, onSim, onNao) {
+  $('#confirmTexto').textContent = texto;
   abrirModal('#modalConfirm');
 
-  const onSim = () => {
-    contas = contas.filter(c => !(c.recorrenciaId === conta.recorrenciaId && c.dataVencimento > conta.dataVencimento));
-    if (series[conta.recorrenciaId]) series[conta.recorrenciaId].ativo = false;
-    saveContas(contas);
-    saveSeries(series);
-    fecharTodosModais();
-    toast('Cobranças futuras removidas');
-    // reabre o form de edição para o usuário continuar
-    abrirFormEdicao(conta.id);
-    limpar();
-  };
-  const onNao = () => {
-    if (series[conta.recorrenciaId]) series[conta.recorrenciaId].ativo = false;
-    saveSeries(series);
-    fecharTodosModais();
-    abrirFormEdicao(conta.id);
-    limpar();
-  };
+  const simBtn = $('#confirmSim');
+  const naoBtn = $('#confirmNao');
+
   function limpar() {
-    $('#confirmSim').removeEventListener('click', onSim);
-    $('#confirmNao').removeEventListener('click', onNao);
+    simBtn.removeEventListener('click', handleSim);
+    naoBtn.removeEventListener('click', handleNao);
   }
-  $('#confirmSim').addEventListener('click', onSim);
-  $('#confirmNao').addEventListener('click', onNao);
+  function handleSim() { limpar(); fecharTodosModais(); if (onSim) onSim(); }
+  function handleNao() { limpar(); fecharTodosModais(); if (onNao) onNao(); }
+
+  simBtn.addEventListener('click', handleSim);
+  naoBtn.addEventListener('click', handleNao);
+}
+
+function perguntarExclusaoFuturas(conta) {
+  confirmar(
+    'Deseja excluir todas as cobranças futuras desta conta recorrente? A conta atual será mantida.',
+    () => {
+      contas = contas.filter(c => !(c.recorrenciaId === conta.recorrenciaId && c.dataVencimento > conta.dataVencimento));
+      if (series[conta.recorrenciaId]) series[conta.recorrenciaId].ativo = false;
+      saveContas(contas);
+      saveSeries(series);
+      toast('Cobranças futuras removidas');
+      abrirFormEdicao(conta.id);
+    },
+    () => {
+      if (series[conta.recorrenciaId]) series[conta.recorrenciaId].ativo = false;
+      saveSeries(series);
+      abrirFormEdicao(conta.id);
+    }
+  );
 }
 
 $('#formConta').addEventListener('submit', (e) => {
@@ -654,6 +817,7 @@ function renderTudo() {
    ========================================================= */
 
 ensureRecurringCoverage();
+refreshCategoriaSelects();
 renderTudo();
 
 /* Registro do service worker (permite instalar como app / uso offline) */

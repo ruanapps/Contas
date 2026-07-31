@@ -139,18 +139,8 @@
         <label for="fCategoria">Categoria</label>
         <select id="fCategoria" required>
           <option value="">Selecione...</option>
-          <option>Moradia</option>
-          <option>Contas fixas</option>
-          <option>Cartão de crédito</option>
-          <option>Transporte</option>
-          <option>Saúde</option>
-          <option>Educação</option>
-          <option>Alimentação</option>
-          <option>Lazer</option>
-          <option>Assinaturas</option>
-          <option>Impostos</option>
-          <option>Outros</option>
         </select>
+        <button type="button" class="link-btn" id="btnGerenciarCategorias">Gerenciar categorias</button>
       </div>
 
       <div class="field">
@@ -225,18 +215,8 @@
         <label for="ffCategoria">Categoria</label>
         <select id="ffCategoria">
           <option value="">Todas</option>
-          <option>Moradia</option>
-          <option>Contas fixas</option>
-          <option>Cartão de crédito</option>
-          <option>Transporte</option>
-          <option>Saúde</option>
-          <option>Educação</option>
-          <option>Alimentação</option>
-          <option>Lazer</option>
-          <option>Assinaturas</option>
-          <option>Impostos</option>
-          <option>Outros</option>
         </select>
+        <button type="button" class="link-btn" id="btnGerenciarCategoriasFiltro">Gerenciar categorias</button>
       </div>
       <div class="field">
         <label for="ffStatus">Status</label>
@@ -260,6 +240,19 @@
         <button type="button" class="btn-secondary" data-close>Cancelar</button>
         <button type="submit" class="btn-primary">Salvar filtro</button>
       </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Gerenciar categorias -->
+<div class="modal-overlay" id="modalCategorias" hidden>
+  <div class="modal modal-form">
+    <button class="modal-close" data-close>×</button>
+    <h2>Categorias</h2>
+    <div class="categorias-lista" id="categoriasLista"></div>
+    <form id="formNovaCategoria" class="nova-categoria-form">
+      <input type="text" id="novaCategoriaInput" placeholder="Nova categoria..." maxlength="30" required>
+      <button type="submit">Adicionar</button>
     </form>
   </div>
 </div>

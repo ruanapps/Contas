@@ -359,6 +359,9 @@ button, input, select, textarea {
   z-index: 100;
   backdrop-filter: blur(2px);
 }
+.modal-overlay[hidden] {
+  display: none;
+}
 @media (min-width: 620px) {
   .modal-overlay { align-items: center; }
 }
@@ -488,6 +491,80 @@ button, input, select, textarea {
   border-color: var(--gold);
 }
 .field textarea { resize: vertical; font-family: inherit; }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 12.5px;
+  padding: 0;
+  margin-top: 6px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.categorias-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+.categoria-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px 9px 14px;
+  font-size: 14px;
+}
+.categoria-row button {
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 17px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.categoria-row button:hover { background: var(--red-soft); }
+.categorias-vazio {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 18px 0;
+}
+
+.nova-categoria-form {
+  display: flex;
+  gap: 8px;
+}
+.nova-categoria-form input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 12px;
+  font-size: 14px;
+  outline: none;
+}
+.nova-categoria-form input:focus { border-color: var(--gold); }
+.nova-categoria-form button {
+  flex-shrink: 0;
+  border: none;
+  background: var(--gold);
+  color: #1a1408;
+  border-radius: var(--radius-sm);
+  padding: 0 16px;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+}
 
 .field-check { margin-top: 4px; }
 .checkbox-label {
