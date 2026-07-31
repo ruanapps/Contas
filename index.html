@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contas a Pagar</title>
+<meta name="theme-color" content="#12181A">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Cabeçalho -->
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="topbar-stripe"></span>
+      <h1>Contas a Pagar</h1>
+    </div>
+    <button class="btn-add" id="btnNovaConta" title="Nova conta" aria-label="Nova conta">+</button>
+  </header>
+
+  <!-- Resumo / medidor do mês -->
+  <section class="summary" id="summaryCard">
+    <div class="summary-main">
+      <span class="summary-label">Pendente este mês</span>
+      <span class="summary-value" id="summaryPendenteValor">R$ 0,00</span>
+    </div>
+    <div class="summary-ring-wrap">
+      <svg viewBox="0 0 120 120" class="summary-ring" aria-hidden="true">
+        <circle cx="60" cy="60" r="52" class="ring-track"/>
+        <circle cx="60" cy="60" r="52" class="ring-progress" id="ringProgress"/>
+      </svg>
+      <div class="summary-ring-text">
+        <span id="ringPercent">0%</span>
+        <small>pago</small>
+      </div>
+    </div>
+    <div class="summary-sub">
+      <div><span class="dot dot-red"></span>Vencidas <strong id="summaryVencidas">0</strong></div>
+      <div><span class="dot dot-green"></span>Pagas <strong id="summaryPagas">0</strong></div>
+    </div>
+  </section>
+
+  <!-- Abas -->
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="pendentes" role="tab" aria-selected="true">A Pagar</button>
+    <button class="tab" data-tab="pagas" role="tab" aria-selected="false">Pagas</button>
+    <button class="tab" data-tab="periodo" role="tab" aria-selected="false">Por Período</button>
+  </nav>
+
+  <main class="tab-panels">
+
+    <!-- ABA: A PAGAR -->
+    <section class="tab-panel active" id="panel-pendentes">
+      <div class="list" id="listaPendentes"></div>
+      <div class="empty-state" id="emptyPendentes" hidden>
+        <p>Nenhuma conta pendente.</p>
+        <span>Toque em "+" para lançar a primeira conta a pagar.</span>
+      </div>
+    </section>
+
+    <!-- ABA: PAGAS -->
+    <section class="tab-panel" id="panel-pagas">
+      <div class="list" id="listaPagas"></div>
+      <div class="empty-state" id="emptyPagas" hidden>
+        <p>Nenhuma conta paga ainda.</p>
+        <span>Contas quitadas aparecem aqui.</span>
+      </div>
+    </section>
+
+    <!-- ABA: POR PERÍODO -->
+    <section class="tab-panel" id="panel-periodo">
+
+      <div class="month-nav">
+        <button id="mesAnterior" aria-label="Mês anterior">‹</button>
+        <div class="month-nav-label" id="mesAtualLabel">—</div>
+        <button id="mesProximo" aria-label="Próximo mês">›</button>
+      </div>
+
+      <div class="filtros-pinados" id="filtrosPinados"></div>
+
+      <button class="btn-filtro-novo" id="btnNovoFiltro">+ Novo filtro personalizado</button>
+
+      <div class="periodo-resumo" id="periodoResumo"></div>
+
+      <div class="list" id="listaPeriodo"></div>
+      <div class="empty-state" id="emptyPeriodo" hidden>
+        <p>Nada por aqui neste período.</p>
+        <span>Tente outro mês ou ajuste o filtro.</span>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- MODAL: Detalhe da conta -->
+<div class="modal-overlay" id="modalDetalhe" hidden>
+  <div class="modal modal-detalhe">
+    <button class="modal-close" data-close>×</button>
+    <div class="detalhe-header">
+      <span class="badge" id="detCategoria"></span>
+      <span class="status-pill" id="detStatus"></span>
+    </div>
+    <h2 id="detNome"></h2>
+    <div class="detalhe-grid">
+      <div><label>Valor original</label><span id="detValorOriginal"></span></div>
+      <div><label>Vencimento</label><span id="detVencimento"></span></div>
+      <div><label>Valor pago</label><span id="detValorPago"></span></div>
+      <div><label>Data de pagamento</label><span id="detDataPagamento"></span></div>
+    </div>
+    <div class="detalhe-obs" id="detObsWrap">
+      <label>Observações</label>
+      <p id="detObs"></p>
+    </div>
+    <div class="detalhe-recorrente" id="detRecorrenteTag" hidden>↻ Conta recorrente</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnEditar">Editar</button>
+      <button class="btn-primary" id="btnMarcarPago">Marcar como pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Criar/Editar/Pagar conta -->
+<div class="modal-overlay" id="modalForm" hidden>
+  <div class="modal modal-form">
+    <button class="modal-close" data-close>×</button>
+    <h2 id="formTitulo">Nova conta</h2>
+    <form id="formConta">
+      <input type="hidden" id="fId">
+
+      <div class="field">
+        <label for="fCategoria">Categoria</label>
+        <select id="fCategoria" required>
+          <option value="">Selecione...</option>
+          <option>Moradia</option>
+          <option>Contas fixas</option>
+          <option>Cartão de crédito</option>
+          <option>Transporte</option>
+          <option>Saúde</option>
+          <option>Educação</option>
+          <option>Alimentação</option>
+          <option>Lazer</option>
+          <option>Assinaturas</option>
+          <option>Impostos</option>
+          <option>Outros</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="fNome">Nome da conta</label>
+        <input type="text" id="fNome" placeholder="Ex.: Aluguel, Energia, Netflix..." required>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="fValorOriginal">Valor original</label>
+          <input type="number" id="fValorOriginal" step="0.01" min="0" placeholder="0,00" required>
+        </div>
+        <div class="field">
+          <label for="fVencimento">Data de vencimento</label>
+          <input type="date" id="fVencimento" required>
+        </div>
+      </div>
+
+      <div class="field-row" id="pagamentoFields">
+        <div class="field">
+          <label for="fValorPago">Valor pago</label>
+          <input type="number" id="fValorPago" step="0.01" min="0" placeholder="0,00">
+        </div>
+        <div class="field">
+          <label for="fDataPagamento">Data de pagamento</label>
+          <input type="date" id="fDataPagamento">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="fObservacoes">Observações</label>
+        <textarea id="fObservacoes" rows="2" placeholder="Opcional"></textarea>
+      </div>
+
+      <div class="field field-check">
+        <label class="checkbox-label">
+          <input type="checkbox" id="fRecorrente">
+          <span>Cobrança recorrente (repete pelos próximos 12 meses)</span>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-close>Cancelar</button>
+        <button type="submit" class="btn-primary" id="btnSalvarForm">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: Confirmação genérica -->
+<div class="modal-overlay" id="modalConfirm" hidden>
+  <div class="modal modal-confirm">
+    <p id="confirmTexto">Tem certeza?</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="confirmNao">Não</button>
+      <button class="btn-danger" id="confirmSim">Sim</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Salvar filtro personalizado -->
+<div class="modal-overlay" id="modalFiltro" hidden>
+  <div class="modal modal-form">
+    <button class="modal-close" data-close>×</button>
+    <h2>Novo filtro personalizado</h2>
+    <form id="formFiltro">
+      <div class="field">
+        <label for="ffNome">Nome do filtro</label>
+        <input type="text" id="ffNome" placeholder="Ex.: Cartões, Só vencidas..." required>
+      </div>
+      <div class="field">
+        <label for="ffCategoria">Categoria</label>
+        <select id="ffCategoria">
+          <option value="">Todas</option>
+          <option>Moradia</option>
+          <option>Contas fixas</option>
+          <option>Cartão de crédito</option>
+          <option>Transporte</option>
+          <option>Saúde</option>
+          <option>Educação</option>
+          <option>Alimentação</option>
+          <option>Lazer</option>
+          <option>Assinaturas</option>
+          <option>Impostos</option>
+          <option>Outros</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ffStatus">Status</label>
+        <select id="ffStatus">
+          <option value="">Todos</option>
+          <option value="pendente">Pendentes</option>
+          <option value="pago">Pagas</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="ffInicio">De</label>
+          <input type="date" id="ffInicio">
+        </div>
+        <div class="field">
+          <label for="ffFim">Até</label>
+          <input type="date" id="ffFim">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-close>Cancelar</button>
+        <button type="submit" class="btn-primary">Salvar filtro</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
