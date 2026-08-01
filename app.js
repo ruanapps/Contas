@@ -3,6 +3,38 @@
    Persistência: localStorage (100% local)
    ========================================================= */
 
+/* ---------- Captura de erros visível na tela (diagnóstico) ---------- 
+   Fica registrado antes de qualquer outra coisa para pegar o máximo
+   possível de erros, inclusive de scripts externos. Mostra um aviso
+   fixo no topo da página com o erro, para dar para ler/printar sem
+   precisar abrir o console do navegador. */
+(function () {
+  let jaMostrado = false;
+  function mostrarErroFatal(texto) {
+    try {
+      if (jaMostrado) return; // evita empilhar vários avisos
+      jaMostrado = true;
+      const banner = document.createElement('div');
+      banner.setAttribute('style', [
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:99999',
+        'background:#C85C4E', 'color:#fff', 'font:12px monospace',
+        'padding:10px 12px', 'white-space:pre-wrap', 'word-break:break-word',
+        'max-height:40vh', 'overflow:auto', 'box-shadow:0 2px 8px rgba(0,0,0,0.4)'
+      ].join(';'));
+      banner.textContent = '⚠️ Erro no app (pode printar esta tela e enviar):\n' + texto;
+      document.body ? document.body.prepend(banner) : window.addEventListener('DOMContentLoaded', () => document.body.prepend(banner));
+    } catch (e) { /* nada mais a fazer se até isso falhar */ }
+  }
+  window.addEventListener('error', (e) => {
+    const local = e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno}:${e.colno})` : '';
+    mostrarErroFatal((e.message || 'Erro desconhecido') + local);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    const motivo = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+    mostrarErroFatal('Promise rejeitada sem tratamento: ' + motivo);
+  });
+})();
+
 const STORAGE_KEY = 'contasPagar.contas';
 const SCHEMA_VERSION_KEY = 'contasPagar.schemaVersion';
 const SCHEMA_VERSION_ATUAL = 2; // v2 = valores monetários em centavos inteiros

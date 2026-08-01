@@ -1,4 +1,4 @@
-const CACHE_NAME = 'contas-a-pagar-v8';
+const CACHE_NAME = 'contas-a-pagar-v9';
 const ASSETS = [
   './',
   './index.html',
