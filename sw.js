@@ -1,4 +1,4 @@
-const CACHE_NAME = 'contas-a-pagar-v2';
+const CACHE_NAME = 'contas-a-pagar-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,17 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(
+        ASSETS.map((asset) =>
+          cache.add(asset).catch((err) => {
+            // Não deixa uma falha isolada (ex.: arquivo renomeado) derrubar
+            // o registro inteiro do service worker.
+            console.warn('Falha ao cachear', asset, err);
+          })
+        )
+      )
+    )
   );
   self.skipWaiting();
 });

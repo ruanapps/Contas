@@ -27,6 +27,26 @@ Depois acesse `http://localhost:8000` no navegador.
 
 O app passa a se comportar como um aplicativo instalado, com ícone próprio e sem a barra do navegador.
 
+### Se a instalação virar só um atalho (abre dentro do Chrome, com barra de endereço)
+
+Isso quase sempre acontece porque o navegador não considerou o site "instalável" de verdade — e nesse caso ele
+silenciosamente cai para um atalho simples, mesmo que o botão diga "Instalar". As causas mais comuns:
+
+1. **Abriu o `index.html` direto (duplo clique) ou por `file://`.** Service worker e manifest só funcionam em
+   `https://` ou em `http://localhost`. Um `file://` nunca instala como app de verdade.
+2. **Acessou pelo IP local do computador** (ex.: `http://192.168.0.10:8000` no celular). Isso também não conta
+   como contexto seguro. Funciona certinho no **GitHub Pages** (é `https://`) ou, para testar no próprio
+   computador, acessando exatamente `http://localhost:8000` (não o IP).
+3. **Cache/instalação antiga de uma tentativa anterior.** Se você já tinha tentado instalar antes, remova o atalho
+   antigo do celular e, no Chrome, vá em **Configurações do site → Excluir dados do site** para esse endereço antes
+   de tentar de novo (isso limpa qualquer service worker travado de antes).
+
+**Como confirmar que está tudo certo antes de instalar:** no Chrome (celular ou desktop), abra o site publicado e
+toque nos três pontinhos. Se aparecer a opção **"Instalar app"** com o ícone e nome do app (em vez de só
+"Adicionar atalho"/"Adicionar à tela inicial" genérico), o navegador reconheceu o PWA corretamente. No desktop dá
+pra checar em detalhe: F12 → aba **Application** → **Manifest**, que mostra se o manifest foi lido sem erros e se
+o service worker está "activated and is running".
+
 > **Importante:** como os dados ficam salvos no `localStorage` do navegador, cada aparelho/navegador tem seus próprios dados — não há sincronização automática entre dispositivos. Use a função de **Backup local** (exportar/importar `.xlsx`) para levar seus dados de um aparelho para outro.
 
 > **Nota:** a geração/leitura das planilhas de backup usa uma biblioteca carregada de um CDN, então é necessário estar conectado à internet na primeira vez que essas telas forem abertas (depois, o service worker mantém em cache para uso offline).
