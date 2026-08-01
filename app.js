@@ -1199,9 +1199,27 @@ let unsubscribeSnapshot = null;
 let aplicandoSnapshotRemoto = false;
 let timerSincronizacao = null;
 
+let tentativasInicializacaoFirebase = 0;
+
 function inicializarFirebase() {
   try {
-    if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') return;
+    // Os scripts do Firebase carregam em paralelo (async) e podem ainda não
+    // ter terminado quando o app.js roda — em vez de desistir de cara,
+    // tenta de novo por alguns segundos antes de aceitar que não vieram.
+    const prontoParaIniciar =
+      typeof firebase !== 'undefined' &&
+      typeof firebase.auth === 'function' &&
+      typeof firebase.firestore === 'function' &&
+      typeof firebaseConfig !== 'undefined';
+
+    if (!prontoParaIniciar) {
+      if (tentativasInicializacaoFirebase < 25) {
+        tentativasInicializacaoFirebase++;
+        setTimeout(inicializarFirebase, 300);
+      }
+      return;
+    }
+
     if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('COLE_AQUI')) return;
 
     firebase.initializeApp(firebaseConfig);
@@ -1214,6 +1232,7 @@ function inicializarFirebase() {
 
     firebaseDisponivel = true;
     firebase.auth().onAuthStateChanged(aoMudarEstadoAuth);
+    atualizarUINuvem();
   } catch (err) {
     console.error('Falha ao inicializar Firebase:', err);
     firebaseDisponivel = false;
