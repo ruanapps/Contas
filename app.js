@@ -118,6 +118,26 @@ function tratarSelecaoCategoria(selectEl) {
 $('#fCategoria').addEventListener('change', () => tratarSelecaoCategoria($('#fCategoria')));
 $('#ffCategoria').addEventListener('change', () => tratarSelecaoCategoria($('#ffCategoria')));
 
+// Sugere, no campo "Nome da conta", os nomes já usados anteriormente
+// dentro da categoria selecionada (ex.: categoria "Assinaturas" já tendo
+// "Netflix" e "Spotify" lançados antes). O campo continua totalmente
+// livre para digitação — isso só oferece atalhos via datalist.
+function popularSugestoesNome() {
+  const datalist = $('#fNomeSugestoes');
+  datalist.innerHTML = '';
+  const categoriaAtual = $('#fCategoria').value;
+  if (!categoriaAtual || categoriaAtual === '__nova__') return;
+  const nomes = [...new Set(
+    contas.filter(c => c.categoria === categoriaAtual).map(c => c.nome).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  nomes.forEach(nome => {
+    const opt = document.createElement('option');
+    opt.value = nome;
+    datalist.appendChild(opt);
+  });
+}
+$('#fCategoria').addEventListener('change', popularSugestoesNome);
+
 function renderCategoriasModal() {
   const lista = $('#categoriasLista');
   lista.innerHTML = '';
@@ -760,6 +780,7 @@ function abrirFormNovo() {
   modoForm = 'novo';
   contaEmEdicaoId = null;
   limparForm();
+  popularSugestoesNome();
   $('#formTitulo').textContent = 'Nova conta';
   $('#btnSalvarForm').textContent = 'Salvar';
   abrirModal('#modalForm');
@@ -780,6 +801,7 @@ function preencherFormComConta(conta) {
   $('#fId').value = conta.id;
   garantirOpcaoCategoria($('#fCategoria'), conta.categoria);
   $('#fCategoria').value = conta.categoria;
+  popularSugestoesNome();
   $('#fNome').value = conta.nome;
   $('#fValorOriginal').value = centavosParaTexto(conta.valorOriginal);
   $('#fVencimento').value = conta.dataVencimento;

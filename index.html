@@ -150,7 +150,8 @@
 
       <div class="field">
         <label for="fNome">Nome da conta</label>
-        <input type="text" id="fNome" placeholder="Ex.: Aluguel, Energia, Netflix..." required>
+        <input type="text" id="fNome" list="fNomeSugestoes" placeholder="Ex.: Aluguel, Energia, Netflix..." autocomplete="off" required>
+        <datalist id="fNomeSugestoes"></datalist>
       </div>
 
       <div class="field-row">
