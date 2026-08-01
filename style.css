@@ -762,6 +762,19 @@ button, input, select, textarea {
 .btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .btn-danger { background: var(--red); color: #fff; }
 
+.btn-excluir-conta {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 13px;
+  padding: 14px 0 2px;
+  cursor: pointer;
+  text-align: center;
+}
+.btn-excluir-conta:hover { text-decoration: underline; }
+
 .modal-confirm { text-align: center; padding-bottom: 24px; }
 .modal-confirm p { font-size: 15px; margin: 8px 0 20px; line-height: 1.5; }
 

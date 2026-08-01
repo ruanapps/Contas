@@ -764,6 +764,24 @@ $('#btnMarcarPago').addEventListener('click', () => {
   abrirFormPagamento(contaSelecionadaId);
 });
 
+$('#btnExcluirConta').addEventListener('click', () => {
+  const conta = contas.find(c => c.id === contaSelecionadaId);
+  if (!conta) return;
+  const avisoRecorrente = conta.recorrenciaId
+    ? ' Como é uma cobrança recorrente, só esta ocorrência será excluída — as demais continuam.'
+    : '';
+  confirmar(
+    `Excluir "${conta.nome}"? Essa ação não pode ser desfeita.${avisoRecorrente}`,
+    () => {
+      contas = contas.filter(c => c.id !== contaSelecionadaId);
+      saveContas(contas);
+      contaSelecionadaId = null;
+      renderTudo();
+      toast('Conta excluída');
+    }
+  );
+});
+
 /* =========================================================
    FORMULÁRIO — criar / editar / marcar como pago
    ========================================================= */
