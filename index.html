@@ -6,12 +6,14 @@
 <title>Contas a Pagar</title>
 <meta name="theme-color" content="#12181A">
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -23,7 +25,10 @@
       <span class="topbar-stripe"></span>
       <h1>Contas a Pagar</h1>
     </div>
-    <button class="btn-add" id="btnNovaConta" title="Nova conta" aria-label="Nova conta">+</button>
+    <div class="topbar-actions">
+      <button class="btn-icon" id="btnBackup" title="Backup local" aria-label="Backup local">⇅</button>
+      <button class="btn-add" id="btnNovaConta" title="Nova conta" aria-label="Nova conta">+</button>
+    </div>
   </header>
 
   <!-- Resumo / medidor do mês -->
@@ -150,8 +155,8 @@
 
       <div class="field-row">
         <div class="field">
-          <label for="fValorOriginal">Valor original</label>
-          <input type="number" id="fValorOriginal" step="0.01" min="0" placeholder="0,00" required>
+          <label for="fValorOriginal">Valor original <span class="opcional-tag">(opcional)</span></label>
+          <input type="text" inputmode="decimal" id="fValorOriginal" placeholder="0,00" autocomplete="off">
         </div>
         <div class="field">
           <label for="fVencimento">Data de vencimento</label>
@@ -162,7 +167,7 @@
       <div class="field-row" id="pagamentoFields">
         <div class="field">
           <label for="fValorPago">Valor pago</label>
-          <input type="number" id="fValorPago" step="0.01" min="0" placeholder="0,00">
+          <input type="text" inputmode="decimal" id="fValorPago" placeholder="0,00" autocomplete="off">
         </div>
         <div class="field">
           <label for="fDataPagamento">Data de pagamento</label>
@@ -241,6 +246,24 @@
         <button type="submit" class="btn-primary">Salvar filtro</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- MODAL: Backup local -->
+<div class="modal-overlay" id="modalBackup" hidden>
+  <div class="modal modal-form">
+    <button class="modal-close" data-close>×</button>
+    <h2>Backup local</h2>
+    <p class="backup-desc">
+      Exporte todos os seus dados (contas, categorias e filtros) para uma planilha Excel,
+      que fica salva no seu aparelho. Depois, você pode importar essa mesma planilha
+      para restaurar tudo — útil para guardar uma cópia de segurança ou trocar de aparelho.
+    </p>
+    <div class="backup-actions">
+      <button type="button" class="btn-primary" id="btnExportarBackup">Exportar planilha (.xlsx)</button>
+      <button type="button" class="btn-secondary" id="btnImportarBackup">Importar planilha (.xlsx)</button>
+      <input type="file" id="inputImportarBackup" accept=".xlsx" hidden>
+    </div>
   </div>
 </div>
 

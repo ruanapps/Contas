@@ -27,7 +27,9 @@ Depois acesse `http://localhost:8000` no navegador.
 
 O app passa a se comportar como um aplicativo instalado, com ícone próprio e sem a barra do navegador.
 
-> **Importante:** como os dados ficam salvos no `localStorage` do navegador, cada aparelho/navegador tem seus próprios dados — não há sincronização entre dispositivos nesta versão.
+> **Importante:** como os dados ficam salvos no `localStorage` do navegador, cada aparelho/navegador tem seus próprios dados — não há sincronização automática entre dispositivos. Use a função de **Backup local** (exportar/importar `.xlsx`) para levar seus dados de um aparelho para outro.
+
+> **Nota:** a geração/leitura das planilhas de backup usa uma biblioteca carregada de um CDN, então é necessário estar conectado à internet na primeira vez que essas telas forem abertas (depois, o service worker mantém em cache para uso offline).
 
 ## Funcionalidades
 
@@ -38,7 +40,9 @@ O app passa a se comportar como um aplicativo instalado, com ícone próprio e s
   - **Marcar como pago** reabre o mesmo formulário com valor pago = valor original e data de pagamento = hoje, ambos editáveis antes de confirmar.
 - **Cobrança recorrente**: ao marcar a caixa "Cobrança recorrente", o app gera automaticamente lançamentos mensais para os próximos 12 meses. Esse horizonte de 12 meses é mantido sempre à frente — a cada mês que passa, um novo lançamento é adicionado ao final da série. Ao desmarcar a recorrência de uma conta, o app pergunta se deseja excluir todas as cobranças futuras dessa série (mantendo a conta atual e as já pagas).
 - **Aba "Por Período"**: navegação mês a mês e criação de filtros personalizados (categoria, status, intervalo de datas) que ficam fixados como chips reutilizáveis.
-- **Categorias personalizáveis**: ao selecionar a categoria (no lançamento ou nos filtros), há a opção "+ Criar nova categoria...". Também é possível abrir "Gerenciar categorias" para excluir categorias que não usa mais — contas já lançadas mantêm o nome da categoria mesmo se ela for excluída da lista.
+- **Categorias personalizáveis**: ao selecionar a categoria (no lançamento ou nos filtros), há a opção "+ Criar nova categoria...". Também é possível abrir "Gerenciar categorias" para renomear ou excluir categorias — contas já lançadas acompanham o novo nome quando uma categoria é renomeada, e mantêm o nome antigo quando ela é excluída.
+- **Campos de valor com máscara**: ao digitar o valor original ou o valor pago, o app formata automaticamente com vírgula e sempre 2 casas decimais (ex.: digitar "1234" vira "12,34"), no padrão brasileiro de moeda. Internamente, os valores são guardados como números inteiros de centavos (não em ponto flutuante), o que evita erros de arredondamento nas somas e totais — o ponto flutuante só aparece rapidamente na exportação/importação do backup em Excel, sempre com arredondamento explícito na volta.
+- **Backup local (Excel)**: o botão ⇅ no topo abre a tela de backup. **Exportar** gera uma planilha `.xlsx` com todos os dados (contas, categorias e filtros) para você guardar onde quiser. **Importar** lê uma dessas planilhas e restaura os dados no aparelho — útil para trocar de celular ou recuperar informações. Importar substitui os dados atuais do app (o app pede confirmação antes).
 
 ## Estrutura de arquivos
 

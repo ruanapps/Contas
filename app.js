@@ -4,6 +4,8 @@
    ========================================================= */
 
 const STORAGE_KEY = 'contasPagar.contas';
+const SCHEMA_VERSION_KEY = 'contasPagar.schemaVersion';
+const SCHEMA_VERSION_ATUAL = 2; // v2 = valores monetários em centavos inteiros
 const SERIES_KEY = 'contasPagar.series';
 const FILTROS_KEY = 'contasPagar.filtros';
 const CATEGORIAS_KEY = 'contasPagar.categorias';
@@ -51,6 +53,24 @@ let contas = loadContas();
 let series = loadSeries();
 let filtros = loadFiltros();
 let categorias = loadCategorias();
+
+// Versões anteriores do app guardavam valorOriginal/valorPago em reais
+// (ponto flutuante). A partir daqui eles passam a ser inteiros em
+// centavos. Essa migração roda uma única vez, convertendo dados já
+// salvos no aparelho para o novo formato.
+function migrarParaCentavosSeNecessario() {
+  const versaoSalva = parseInt(localStorage.getItem(SCHEMA_VERSION_KEY) || '1', 10);
+  if (versaoSalva >= SCHEMA_VERSION_ATUAL) return;
+
+  contas = contas.map(c => ({
+    ...c,
+    valorOriginal: c.valorOriginal != null ? Math.round(Number(c.valorOriginal) * 100) : null,
+    valorPago: c.valorPago != null ? Math.round(Number(c.valorPago) * 100) : null,
+  }));
+  saveContas(contas);
+  localStorage.setItem(SCHEMA_VERSION_KEY, String(SCHEMA_VERSION_ATUAL));
+}
+migrarParaCentavosSeNecessario();
 let filtroAtivoId = null;
 
 /* =========================================================
@@ -111,17 +131,103 @@ function renderCategoriasModal() {
   categorias.forEach(cat => {
     const row = document.createElement('div');
     row.className = 'categoria-row';
+
     const nome = document.createElement('span');
+    nome.className = 'categoria-nome';
     nome.textContent = cat;
+
+    const acoes = document.createElement('div');
+    acoes.className = 'categoria-acoes';
+
+    const editar = document.createElement('button');
+    editar.type = 'button';
+    editar.className = 'categoria-editar';
+    editar.textContent = '✎';
+    editar.title = 'Renomear categoria';
+    editar.addEventListener('click', () => ativarEdicaoCategoria(row, cat));
+
     const excluir = document.createElement('button');
     excluir.type = 'button';
+    excluir.className = 'categoria-excluir';
     excluir.textContent = '×';
     excluir.title = 'Excluir categoria';
     excluir.addEventListener('click', () => confirmarExclusaoCategoria(cat));
+
+    acoes.appendChild(editar);
+    acoes.appendChild(excluir);
     row.appendChild(nome);
-    row.appendChild(excluir);
+    row.appendChild(acoes);
     lista.appendChild(row);
   });
+}
+
+function ativarEdicaoCategoria(row, catOriginal) {
+  row.innerHTML = '';
+  row.classList.add('categoria-row--editando');
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'categoria-edit-input';
+  input.maxLength = 30;
+  input.value = catOriginal;
+
+  const acoes = document.createElement('div');
+  acoes.className = 'categoria-acoes';
+
+  const salvar = document.createElement('button');
+  salvar.type = 'button';
+  salvar.className = 'categoria-salvar';
+  salvar.textContent = '✓';
+  salvar.title = 'Salvar novo nome';
+
+  const cancelar = document.createElement('button');
+  cancelar.type = 'button';
+  cancelar.className = 'categoria-excluir';
+  cancelar.textContent = '×';
+  cancelar.title = 'Cancelar';
+
+  function confirmarEdicao() {
+    renomearCategoria(catOriginal, input.value.trim());
+  }
+  salvar.addEventListener('click', confirmarEdicao);
+  cancelar.addEventListener('click', () => renderCategoriasModal());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmarEdicao(); }
+    if (e.key === 'Escape') { e.preventDefault(); renderCategoriasModal(); }
+  });
+
+  acoes.appendChild(salvar);
+  acoes.appendChild(cancelar);
+  row.appendChild(input);
+  row.appendChild(acoes);
+  input.focus();
+  input.select();
+}
+
+function renomearCategoria(nomeAntigo, nomeNovo) {
+  if (!nomeNovo) { renderCategoriasModal(); return; }
+  if (nomeNovo === nomeAntigo) { renderCategoriasModal(); return; }
+
+  const conflito = categorias.some(c => c.toLowerCase() === nomeNovo.toLowerCase() && c !== nomeAntigo);
+  if (conflito) {
+    toast('Já existe uma categoria com esse nome');
+    renderCategoriasModal();
+    return;
+  }
+
+  categorias = categorias.map(c => c === nomeAntigo ? nomeNovo : c);
+  saveCategorias(categorias);
+
+  contas.forEach(c => { if (c.categoria === nomeAntigo) c.categoria = nomeNovo; });
+  saveContas(contas);
+
+  filtros.forEach(f => { if (f.categoria === nomeAntigo) f.categoria = nomeNovo; });
+  saveFiltros(filtros);
+
+  refreshCategoriaSelects();
+  renderCategoriasModal();
+  renderTudo();
+  toast('Categoria renomeada');
 }
 
 function confirmarExclusaoCategoria(cat) {
@@ -208,10 +314,60 @@ function monthsBetween(isoA, isoB) {
   const [by, bm] = isoB.split('-').map(Number);
   return (by - ay) * 12 + (bm - am);
 }
-function formatBRL(valor) {
-  const n = Number(valor) || 0;
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+// Todos os valores monetários são guardados internamente como número
+// INTEIRO de centavos (ex.: R$ 12,34 => 1234). Isso evita erros de
+// arredondamento de ponto flutuante nas somas e comparações. Ponto
+// flutuante só é usado momentaneamente na exportação/importação do
+// backup em Excel (formato mais legível para humanos), sempre com
+// arredondamento explícito ao converter de volta para centavos.
+
+// Formata um valor em CENTAVOS para exibição em reais (ex.: 1234 -> "R$ 12,34").
+function formatBRL(centavos) {
+  const c = Number.isFinite(centavos) ? Math.trunc(centavos) : 0;
+  const negativo = c < 0;
+  const abs = Math.abs(c);
+  const reais = Math.floor(abs / 100);
+  const parte = abs % 100;
+  const reaisFormatado = reais.toLocaleString('pt-BR');
+  return `${negativo ? '-' : ''}R$ ${reaisFormatado},${String(parte).padStart(2, '0')}`;
 }
+function formatValorOuIndefinido(centavos) {
+  if (centavos === null || centavos === undefined || centavos === '') return 'Valor a definir';
+  return formatBRL(centavos);
+}
+
+/* ---------- Máscara de moeda para os campos de valor (baseada em centavos inteiros) ---------- */
+
+// Formata um número INTEIRO de centavos como texto mascarado (ex.: 1234 -> "12,34").
+function centavosParaTexto(centavos) {
+  if (centavos === null || centavos === undefined || centavos === '') return '';
+  const c = Math.trunc(Number(centavos));
+  const negativo = c < 0;
+  const abs = Math.abs(c);
+  const reais = Math.floor(abs / 100);
+  const parte = abs % 100;
+  return `${negativo ? '-' : ''}${reais.toLocaleString('pt-BR')},${String(parte).padStart(2, '0')}`;
+}
+
+function aplicarMascaraMoeda(e) {
+  const el = e.target;
+  const digitos = el.value.replace(/\D/g, '').slice(0, 12);
+  const centavos = digitos ? parseInt(digitos, 10) : null;
+  el.value = centavosParaTexto(centavos);
+  const fim = el.value.length;
+  el.setSelectionRange(fim, fim);
+}
+
+// Converte o texto mascarado (ex.: "1.234,56") direto para CENTAVOS inteiros (123456),
+// extraindo apenas os dígitos — sem nenhuma divisão/multiplicação em ponto flutuante.
+function textoParaCentavos(texto) {
+  if (!texto) return null;
+  const digitos = texto.replace(/\D/g, '');
+  return digitos ? parseInt(digitos, 10) : null;
+}
+
+$('#fValorOriginal').addEventListener('input', aplicarMascaraMoeda);
+$('#fValorPago').addEventListener('input', aplicarMascaraMoeda);
 function formatDataBR(iso) {
   if (!iso) return '—';
   const d = parseISO(iso);
@@ -326,9 +482,11 @@ function criarLinhaConta(conta, { mostrarDataPagamento = false } = {}) {
   info.appendChild(nome);
   info.appendChild(meta);
 
+  const valorBruto = conta.status === 'pago' ? conta.valorPago : conta.valorOriginal;
+  const semValor = valorBruto === null || valorBruto === undefined || valorBruto === '';
   const valor = document.createElement('div');
-  valor.className = `conta-valor ${stripeClass === 'vencida' ? 'vencida' : ''} ${conta.status === 'pago' ? 'pago' : ''}`;
-  valor.textContent = formatBRL(conta.status === 'pago' ? conta.valorPago : conta.valorOriginal);
+  valor.className = `conta-valor ${stripeClass === 'vencida' ? 'vencida' : ''} ${conta.status === 'pago' ? 'pago' : ''} ${semValor ? 'sem-valor' : ''}`;
+  valor.textContent = formatValorOuIndefinido(valorBruto);
 
   row.appendChild(stripe);
   row.appendChild(info);
@@ -552,7 +710,7 @@ function abrirDetalhe(id) {
   $('#detStatus').textContent = statusTexto;
   $('#detStatus').className = `status-pill ${statusClasse}`;
   $('#detNome').textContent = conta.nome;
-  $('#detValorOriginal').textContent = formatBRL(conta.valorOriginal);
+  $('#detValorOriginal').textContent = formatValorOuIndefinido(conta.valorOriginal);
   $('#detVencimento').textContent = formatDataBR(conta.dataVencimento);
   $('#detValorPago').textContent = conta.valorPago != null ? formatBRL(conta.valorPago) : '—';
   $('#detDataPagamento').textContent = conta.dataPagamento ? formatDataBR(conta.dataPagamento) : '—';
@@ -594,6 +752,8 @@ function limparForm() {
   $('#fId').value = '';
   $('#pagamentoFields').style.opacity = '1';
   $$('#pagamentoFields input').forEach(i => i.disabled = false);
+  $('#fValorPago').required = false;
+  $('#fDataPagamento').required = false;
 }
 
 function abrirFormNovo() {
@@ -621,9 +781,9 @@ function preencherFormComConta(conta) {
   garantirOpcaoCategoria($('#fCategoria'), conta.categoria);
   $('#fCategoria').value = conta.categoria;
   $('#fNome').value = conta.nome;
-  $('#fValorOriginal').value = conta.valorOriginal;
+  $('#fValorOriginal').value = centavosParaTexto(conta.valorOriginal);
   $('#fVencimento').value = conta.dataVencimento;
-  $('#fValorPago').value = conta.valorPago != null ? conta.valorPago : '';
+  $('#fValorPago').value = centavosParaTexto(conta.valorPago);
   $('#fDataPagamento').value = conta.dataPagamento || '';
   $('#fObservacoes').value = conta.observacoes || '';
   $('#fRecorrente').checked = !!conta.recorrente;
@@ -648,8 +808,10 @@ function abrirFormPagamento(id) {
   contaEmEdicaoId = id;
   limparForm();
   preencherFormComConta(conta);
-  $('#fValorPago').value = conta.valorOriginal;
+  $('#fValorPago').value = centavosParaTexto(conta.valorOriginal);
   $('#fDataPagamento').value = hojeISO();
+  $('#fValorPago').required = true;
+  $('#fDataPagamento').required = true;
   $('#formTitulo').textContent = 'Marcar como pago';
   $('#btnSalvarForm').textContent = 'Confirmar pagamento';
   abrirModal('#modalForm');
@@ -721,9 +883,9 @@ $('#formConta').addEventListener('submit', (e) => {
   const dados = {
     categoria: $('#fCategoria').value,
     nome: $('#fNome').value.trim(),
-    valorOriginal: parseFloat($('#fValorOriginal').value),
+    valorOriginal: textoParaCentavos($('#fValorOriginal').value),
     dataVencimento: $('#fVencimento').value,
-    valorPago: $('#fValorPago').value !== '' ? parseFloat($('#fValorPago').value) : null,
+    valorPago: textoParaCentavos($('#fValorPago').value),
     dataPagamento: $('#fDataPagamento').value || null,
     observacoes: $('#fObservacoes').value.trim(),
     recorrente: $('#fRecorrente').checked,
@@ -798,6 +960,182 @@ $('#formConta').addEventListener('submit', (e) => {
   fecharTodosModais();
   ensureRecurringCoverage();
   renderTudo();
+});
+
+/* =========================================================
+   BACKUP LOCAL (exportar / importar planilha .xlsx)
+   ========================================================= */
+
+const COLUNAS_CONTAS = ['id', 'categoria', 'nome', 'valorOriginal', 'dataVencimento', 'valorPago', 'dataPagamento', 'observacoes', 'recorrente', 'recorrenciaId', 'status'];
+const COLUNAS_CATEGORIAS = ['nome'];
+const COLUNAS_FILTROS = ['id', 'nome', 'categoria', 'status', 'dataInicio', 'dataFim'];
+const COLUNAS_SERIES = ['recorrenciaId', 'ativo'];
+
+function planilhaDe(linhas, colunas) {
+  if (!linhas.length) return XLSX.utils.aoa_to_sheet([colunas]);
+  return XLSX.utils.json_to_sheet(linhas, { header: colunas });
+}
+
+// Só na fronteira com a planilha (que humanos vão ler/editar) os valores
+// aparecem em reais decimais — as contas de verdade continuam em centavos.
+function centavosParaReaisOuNull(centavos) {
+  return (centavos === null || centavos === undefined) ? null : centavos / 100;
+}
+
+function exportarBackup() {
+  if (typeof XLSX === 'undefined') {
+    toast('Não foi possível carregar o gerador de planilhas. Verifique sua conexão.');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  const contasParaExportar = contas.map(c => ({
+    ...c,
+    valorOriginal: centavosParaReaisOuNull(c.valorOriginal),
+    valorPago: centavosParaReaisOuNull(c.valorPago),
+  }));
+
+  XLSX.utils.book_append_sheet(wb, planilhaDe(contasParaExportar, COLUNAS_CONTAS), 'Contas');
+  XLSX.utils.book_append_sheet(wb, planilhaDe(categorias.map(nome => ({ nome })), COLUNAS_CATEGORIAS), 'Categorias');
+  XLSX.utils.book_append_sheet(wb, planilhaDe(filtros, COLUNAS_FILTROS), 'Filtros');
+  XLSX.utils.book_append_sheet(
+    wb,
+    planilhaDe(Object.keys(series).map(id => ({ recorrenciaId: id, ativo: !!series[id].ativo })), COLUNAS_SERIES),
+    'Series'
+  );
+
+  XLSX.writeFile(wb, `contas-a-pagar-backup-${hojeISO()}.xlsx`);
+  toast('Backup exportado');
+}
+
+function paraBooleano(valor) {
+  if (typeof valor === 'boolean') return valor;
+  if (typeof valor === 'number') return valor !== 0;
+  if (typeof valor === 'string') return ['true', '1', 'verdadeiro'].includes(valor.trim().toLowerCase());
+  return false;
+}
+
+function paraNumeroOuNull(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  const n = Number(valor);
+  return Number.isNaN(n) ? null : n;
+}
+
+// Planilha traz reais decimais (ex.: 12.34); convertemos para centavos
+// inteiros com arredondamento explícito, absorvendo aqui qualquer
+// imprecisão de ponto flutuante que a própria planilha possa ter.
+function reaisParaCentavosOuNull(valor) {
+  const n = paraNumeroOuNull(valor);
+  return n === null ? null : Math.round(n * 100);
+}
+
+function normalizarDataImportada(valor) {
+  if (valor === null || valor === undefined || valor === '') return null;
+  if (valor instanceof Date) {
+    return isoFromParts(valor.getFullYear(), valor.getMonth(), valor.getDate());
+  }
+  if (typeof valor === 'number' && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code) {
+    const p = XLSX.SSF.parse_date_code(valor);
+    if (p) return isoFromParts(p.y, p.m - 1, p.d);
+  }
+  const texto = String(valor).trim();
+  const m = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : (texto || null);
+}
+
+function lerAba(wb, nomeAba) {
+  const sheet = wb.Sheets[nomeAba];
+  return sheet ? XLSX.utils.sheet_to_json(sheet, { defval: null }) : [];
+}
+
+function importarBackup(file) {
+  if (typeof XLSX === 'undefined') {
+    toast('Não foi possível carregar o leitor de planilhas. Verifique sua conexão.');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    let wb;
+    try {
+      wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
+    } catch (err) {
+      toast('Não foi possível ler esse arquivo. Verifique se é uma planilha .xlsx válida.');
+      return;
+    }
+
+    const contasRows = lerAba(wb, 'Contas');
+    const categoriasRows = lerAba(wb, 'Categorias');
+    const filtrosRows = lerAba(wb, 'Filtros');
+    const seriesRows = lerAba(wb, 'Series');
+
+    if (contasRows.length === 0 && categoriasRows.length === 0) {
+      toast('Esse arquivo não parece ser um backup válido deste app.');
+      return;
+    }
+
+    confirmar(
+      'Importar esta planilha vai substituir todos os dados atuais do app (contas, categorias e filtros). Deseja continuar?',
+      () => {
+        contas = contasRows
+          .filter(r => r.nome || r.id)
+          .map(r => ({
+            id: r.id ? String(r.id) : uid(),
+            categoria: r.categoria || '',
+            nome: r.nome || '',
+            valorOriginal: reaisParaCentavosOuNull(r.valorOriginal),
+            dataVencimento: normalizarDataImportada(r.dataVencimento) || hojeISO(),
+            valorPago: reaisParaCentavosOuNull(r.valorPago),
+            dataPagamento: normalizarDataImportada(r.dataPagamento),
+            observacoes: r.observacoes || '',
+            recorrente: paraBooleano(r.recorrente),
+            recorrenciaId: r.recorrenciaId ? String(r.recorrenciaId) : null,
+            status: r.status === 'pago' ? 'pago' : 'pendente',
+          }));
+
+        categorias = categoriasRows.map(r => r.nome).filter(Boolean);
+        if (categorias.length === 0) categorias = [...CATEGORIAS_PADRAO];
+
+        filtros = filtrosRows
+          .filter(r => r.nome)
+          .map(r => ({
+            id: r.id ? String(r.id) : uid(),
+            nome: r.nome,
+            categoria: r.categoria || '',
+            status: r.status || '',
+            dataInicio: normalizarDataImportada(r.dataInicio) || '',
+            dataFim: normalizarDataImportada(r.dataFim) || '',
+          }));
+
+        series = {};
+        seriesRows.forEach(r => {
+          if (r.recorrenciaId) series[String(r.recorrenciaId)] = { ativo: paraBooleano(r.ativo) };
+        });
+
+        saveContas(contas);
+        saveCategorias(categorias);
+        saveFiltros(filtros);
+        saveSeries(series);
+        filtroAtivoId = null;
+
+        ensureRecurringCoverage();
+        refreshCategoriaSelects();
+        renderTudo();
+        toast('Backup importado com sucesso');
+      }
+    );
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+$('#btnBackup').addEventListener('click', () => abrirModal('#modalBackup'));
+$('#btnExportarBackup').addEventListener('click', exportarBackup);
+$('#btnImportarBackup').addEventListener('click', () => $('#inputImportarBackup').click());
+$('#inputImportarBackup').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) importarBackup(file);
+  e.target.value = '';
 });
 
 /* =========================================================
