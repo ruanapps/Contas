@@ -17,7 +17,9 @@ Depois acesse `http://localhost:8000` no navegador.
 
 ## Publicando no GitHub Pages (para instalar no celular)
 
-1. Crie um repositório no GitHub e suba todos os arquivos desta pasta (`index.html`, `style.css`, `app.js`, `manifest.json`, `sw.js`, `icons/`).
+1. Crie um repositório no GitHub e suba **todos os arquivos desta pasta soltos na raiz do repositório**
+   (não dentro de uma subpasta) — `index.html`, `style.css`, `app.js`, `manifest.json`, `sw.js` e os `icon-*.png`.
+   Se você arrastar os arquivos direto para a página do GitHub, é exatamente isso que acontece por padrão.
 2. No repositório, vá em **Settings → Pages**.
 3. Em "Source", selecione a branch (`main`) e a pasta `/root`. Salve.
 4. Aguarde alguns minutos até o GitHub gerar a URL (algo como `https://seu-usuario.github.io/nome-do-repo/`).
@@ -32,20 +34,26 @@ O app passa a se comportar como um aplicativo instalado, com ícone próprio e s
 Isso quase sempre acontece porque o navegador não considerou o site "instalável" de verdade — e nesse caso ele
 silenciosamente cai para um atalho simples, mesmo que o botão diga "Instalar". As causas mais comuns:
 
-1. **Abriu o `index.html` direto (duplo clique) ou por `file://`.** Service worker e manifest só funcionam em
+1. **Os ícones não estão no caminho que o `manifest.json` espera.** O erro mais comum: subir os arquivos
+   `icon-*.png` dentro de uma pasta `icons/` enquanto o manifest aponta para o caminho errado (ou vice-versa) —
+   o navegador não consegue carregar nenhum ícone, considera o manifest inválido e cai no modo atalho. Confira em
+   `https://SEU-USUARIO.github.io/SEU-REPO/icon-192.png` se a imagem abre direto no navegador; se der 404, é isso.
+   **Nesta versão, todos os arquivos (inclusive os ícones) ficam soltos na raiz do projeto**, sem pasta `icons/`,
+   para evitar esse problema.
+2. **Abriu o `index.html` direto (duplo clique) ou por `file://`.** Service worker e manifest só funcionam em
    `https://` ou em `http://localhost`. Um `file://` nunca instala como app de verdade.
-2. **Acessou pelo IP local do computador** (ex.: `http://192.168.0.10:8000` no celular). Isso também não conta
+3. **Acessou pelo IP local do computador** (ex.: `http://192.168.0.10:8000` no celular). Isso também não conta
    como contexto seguro. Funciona certinho no **GitHub Pages** (é `https://`) ou, para testar no próprio
    computador, acessando exatamente `http://localhost:8000` (não o IP).
-3. **Cache/instalação antiga de uma tentativa anterior.** Se você já tinha tentado instalar antes, remova o atalho
+4. **Cache/instalação antiga de uma tentativa anterior.** Se você já tinha tentado instalar antes, remova o atalho
    antigo do celular e, no Chrome, vá em **Configurações do site → Excluir dados do site** para esse endereço antes
    de tentar de novo (isso limpa qualquer service worker travado de antes).
 
 **Como confirmar que está tudo certo antes de instalar:** no Chrome (celular ou desktop), abra o site publicado e
 toque nos três pontinhos. Se aparecer a opção **"Instalar app"** com o ícone e nome do app (em vez de só
 "Adicionar atalho"/"Adicionar à tela inicial" genérico), o navegador reconheceu o PWA corretamente. No desktop dá
-pra checar em detalhe: F12 → aba **Application** → **Manifest**, que mostra se o manifest foi lido sem erros e se
-o service worker está "activated and is running".
+pra checar em detalhe: F12 → aba **Application** → **Manifest**, que mostra se o manifest foi lido sem erros (se
+algum ícone não carregar, aparece um aviso ali) e se o service worker está "activated and is running".
 
 > **Importante:** como os dados ficam salvos no `localStorage` do navegador, cada aparelho/navegador tem seus próprios dados — não há sincronização automática entre dispositivos. Use a função de **Backup local** (exportar/importar `.xlsx`) para levar seus dados de um aparelho para outro.
 
@@ -69,10 +77,10 @@ o service worker está "activated and is running".
 
 ```
 contas-a-pagar/
-├── index.html      → estrutura da página e dos modais
-├── style.css        → tema visual
-├── app.js            → toda a lógica (dados, recorrência, filtros, renderização)
-├── manifest.json  → configuração de instalação como PWA
-├── sw.js               → service worker (cache offline)
-└── icons/               → ícones do app
+├── index.html            → estrutura da página e dos modais
+├── style.css             → tema visual
+├── app.js                → toda a lógica (dados, recorrência, filtros, renderização)
+├── manifest.json         → configuração de instalação como PWA
+├── sw.js                 → service worker (cache offline)
+└── icon-*.png            → ícones do app (soltos na raiz, junto dos demais arquivos)
 ```
