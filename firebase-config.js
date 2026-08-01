@@ -18,10 +18,10 @@
    ========================================================= */
 
 const firebaseConfig = {
-  apiKey: "COLE_AQUI_SUA_API_KEY",
-  authDomain: "COLE_AQUI.firebaseapp.com",
-  projectId: "COLE_AQUI",
-  storageBucket: "COLE_AQUI.appspot.com",
-  messagingSenderId: "COLE_AQUI",
-  appId: "COLE_AQUI",
+  apiKey: "AIzaSyB4_TQ5yVyZRQQXltm2bXKnDq16PBFp6GI",
+  authDomain: "contas-c655b.firebaseapp.com",
+  projectId: "contas-c655b",
+  storageBucket: "contas-c655b.firebasestorage.app",
+  messagingSenderId: "825846387960",
+  appId: "1:825846387960:web:7b28a2a431af81e744970d",
 };
