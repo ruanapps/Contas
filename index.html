@@ -14,6 +14,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 </head>
 <body>
 
@@ -26,6 +30,7 @@
       <h1>Contas a Pagar</h1>
     </div>
     <div class="topbar-actions">
+      <button class="btn-icon" id="btnNuvem" title="Sincronização na nuvem" aria-label="Sincronização na nuvem">☁</button>
       <button class="btn-icon" id="btnBackup" title="Backup local" aria-label="Backup local">⇅</button>
       <button class="btn-add" id="btnNovaConta" title="Nova conta" aria-label="Nova conta">+</button>
     </div>
@@ -250,7 +255,65 @@
   </div>
 </div>
 
+<!-- MODAL: Sincronização na nuvem -->
+<div class="modal-overlay" id="modalNuvem" hidden>
+  <div class="modal modal-form">
+    <button class="modal-close" data-close>×</button>
+    <h2>Sincronização na nuvem</h2>
+
+    <!-- Estado: Firebase não configurado neste app -->
+    <div id="nuvemNaoConfigurado" hidden>
+      <p class="backup-desc">
+        Para ativar a sincronização automática entre aparelhos, configure as credenciais do seu
+        projeto Firebase no arquivo <code>firebase-config.js</code> e habilite o login por Google,
+        o login por e-mail/senha e o Firestore no painel do Firebase. O passo a passo está no README.
+      </p>
+    </div>
+
+    <!-- Estado: deslogado -->
+    <div id="nuvemDeslogado" hidden>
+      <p class="backup-desc">Entre para sincronizar automaticamente suas contas entre aparelhos.</p>
+
+      <button type="button" class="btn-google" id="btnLoginGoogle">
+        <span>G</span> Entrar com Google
+      </button>
+
+      <div class="divisor-ou"><span>ou</span></div>
+
+      <form id="formLoginEmail">
+        <div class="field">
+          <label for="nuvemEmail">E-mail</label>
+          <input type="email" id="nuvemEmail" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="nuvemSenha">Senha</label>
+          <input type="password" id="nuvemSenha" autocomplete="current-password" minlength="6" required>
+        </div>
+        <p class="nuvem-erro" id="nuvemErro" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="btnCriarConta">Criar conta</button>
+          <button type="submit" class="btn-primary" id="btnEntrarEmail">Entrar</button>
+        </div>
+      </form>
+      <button type="button" class="link-btn" id="btnEsqueciSenha">Esqueci minha senha</button>
+    </div>
+
+    <!-- Estado: logado -->
+    <div id="nuvemLogado" hidden>
+      <div class="nuvem-conta-info">
+        <div class="nuvem-avatar" id="nuvemAvatar"></div>
+        <div>
+          <div class="nuvem-email" id="nuvemEmailLogado"></div>
+          <div class="nuvem-status" id="nuvemStatusTexto">Sincronizado</div>
+        </div>
+      </div>
+      <button type="button" class="btn-secondary" id="btnLogout">Sair</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Backup local -->
+
 <div class="modal-overlay" id="modalBackup" hidden>
   <div class="modal modal-form">
     <button class="modal-close" data-close>×</button>

@@ -528,6 +528,94 @@ button, input, select, textarea {
   gap: 10px;
 }
 
+.backup-desc code {
+  background: var(--surface-3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-google span {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: #4285F4;
+}
+.btn-google:hover { background: #f2f2f2; }
+
+.divisor-ou {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.divisor-ou::before, .divisor-ou::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.nuvem-erro {
+  color: var(--red);
+  font-size: 13px;
+  margin: 2px 0 0;
+}
+
+.nuvem-conta-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.nuvem-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #1a1408;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.nuvem-email {
+  font-size: 14.5px;
+  font-weight: 500;
+  word-break: break-all;
+}
+.nuvem-status {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.nuvem-status.ok { color: var(--green); }
+.nuvem-status.sincronizando { color: var(--gold); }
+.nuvem-status.erro { color: var(--red); }
+
+#btnNuvem.logado { border-color: var(--green); color: var(--green); }
+#btnNuvem.sincronizando { border-color: var(--gold); color: var(--gold); }
+#btnNuvem.erro-sync { border-color: var(--red); color: var(--red); }
+
 .opcional-tag {
   color: var(--text-muted);
   font-weight: 400;

@@ -1,9 +1,10 @@
-const CACHE_NAME = 'contas-a-pagar-v4';
+const CACHE_NAME = 'contas-a-pagar-v5';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
+  './firebase-config.js',
   './manifest.json',
   './icon-32.png',
   './icon-180.png',

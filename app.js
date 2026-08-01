@@ -23,6 +23,7 @@ function loadContas() {
 }
 function saveContas(contas) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(contas));
+  agendarSincronizacaoNuvem();
 }
 function loadSeries() {
   try { return JSON.parse(localStorage.getItem(SERIES_KEY)) || {}; }
@@ -30,6 +31,7 @@ function loadSeries() {
 }
 function saveSeries(series) {
   localStorage.setItem(SERIES_KEY, JSON.stringify(series));
+  agendarSincronizacaoNuvem();
 }
 function loadFiltros() {
   try { return JSON.parse(localStorage.getItem(FILTROS_KEY)) || []; }
@@ -37,6 +39,7 @@ function loadFiltros() {
 }
 function saveFiltros(filtros) {
   localStorage.setItem(FILTROS_KEY, JSON.stringify(filtros));
+  agendarSincronizacaoNuvem();
 }
 function loadCategorias() {
   try {
@@ -47,6 +50,7 @@ function loadCategorias() {
 }
 function saveCategorias(cats) {
   localStorage.setItem(CATEGORIAS_KEY, JSON.stringify(cats));
+  agendarSincronizacaoNuvem();
 }
 
 let contas = loadContas();
@@ -1161,6 +1165,264 @@ $('#inputImportarBackup').addEventListener('change', (e) => {
 });
 
 /* =========================================================
+   SINCRONIZAÇÃO NA NUVEM (Firebase Auth + Firestore)
+
+   Totalmente opcional: sem configurar o firebase-config.js, o app
+   continua funcionando 100% local, exatamente como antes. Cada usuário
+   logado só enxerga/altera o próprio documento (users/{uid}) — o
+   isolamento é garantido pelas regras de segurança do Firestore (veja
+   o README), não por lógica no cliente.
+   ========================================================= */
+
+let firebaseDisponivel = false;
+let db = null;
+let usuarioAtual = null;
+let unsubscribeSnapshot = null;
+let aplicandoSnapshotRemoto = false;
+let timerSincronizacao = null;
+
+function inicializarFirebase() {
+  try {
+    if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') return;
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('COLE_AQUI')) return;
+
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    // Permite que edições feitas offline fiquem na fila e sincronizem
+    // sozinhas assim que a conexão voltar.
+    db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+      console.warn('Persistência offline do Firestore indisponível:', err.code);
+    });
+
+    firebaseDisponivel = true;
+    firebase.auth().onAuthStateChanged(aoMudarEstadoAuth);
+  } catch (err) {
+    console.error('Falha ao inicializar Firebase:', err);
+    firebaseDisponivel = false;
+  }
+}
+
+function aoMudarEstadoAuth(user) {
+  if (user) aoLogar(user);
+  else aoDeslogar();
+}
+
+async function aoLogar(user) {
+  usuarioAtual = user;
+  atualizarUINuvem();
+  try {
+    const ref = db.collection('users').doc(user.uid);
+    const snap = await ref.get();
+    if (snap.exists) {
+      // Já existe um backup na nuvem para esta conta: ele manda.
+      aplicarDadosRemotos(snap.data());
+    } else {
+      // Primeiro login desta conta: sobe os dados locais atuais para criar o documento na nuvem.
+      await enviarParaNuvem();
+    }
+    iniciarEscutaNuvem(user.uid);
+    definirStatusSync('ok');
+  } catch (err) {
+    console.error(err);
+    definirStatusSync('erro');
+  }
+}
+
+function aoDeslogar() {
+  usuarioAtual = null;
+  pararEscutaNuvem();
+  atualizarUINuvem();
+}
+
+function iniciarEscutaNuvem(uid) {
+  pararEscutaNuvem();
+  unsubscribeSnapshot = db.collection('users').doc(uid).onSnapshot((doc) => {
+    if (!doc.exists) return;
+    if (doc.metadata.hasPendingWrites) return; // eco da nossa própria escrita, ignora
+    aplicarDadosRemotos(doc.data());
+    definirStatusSync('ok');
+  }, (err) => {
+    console.error(err);
+    definirStatusSync('erro');
+  });
+}
+
+function pararEscutaNuvem() {
+  if (unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+}
+
+// Substitui o estado local pelos dados vindos da nuvem (login em outro
+// aparelho, ou alteração feita em outro dispositivo chegando em tempo real).
+function aplicarDadosRemotos(dados) {
+  aplicandoSnapshotRemoto = true;
+
+  contas = Array.isArray(dados.contas) ? dados.contas : [];
+  categorias = (Array.isArray(dados.categorias) && dados.categorias.length) ? dados.categorias : [...CATEGORIAS_PADRAO];
+  filtros = Array.isArray(dados.filtros) ? dados.filtros : [];
+  series = (dados.series && typeof dados.series === 'object') ? dados.series : {};
+
+  saveContas(contas);
+  saveCategorias(categorias);
+  saveFiltros(filtros);
+  saveSeries(series);
+  localStorage.setItem(SCHEMA_VERSION_KEY, String(SCHEMA_VERSION_ATUAL));
+
+  filtroAtivoId = null;
+  ensureRecurringCoverage();
+  refreshCategoriaSelects();
+  renderTudo();
+  if (!$('#modalCategorias').hidden) renderCategoriasModal();
+
+  aplicandoSnapshotRemoto = false;
+}
+
+// Chamada ao final de toda gravação local (saveContas/saveCategorias/
+// saveFiltros/saveSeries) — agenda um envio para a nuvem daqui a pouco,
+// agrupando mudanças rápidas em sequência num único envio.
+function agendarSincronizacaoNuvem() {
+  if (!firebaseDisponivel || !usuarioAtual || aplicandoSnapshotRemoto) return;
+  definirStatusSync('sincronizando');
+  clearTimeout(timerSincronizacao);
+  timerSincronizacao = setTimeout(enviarParaNuvem, 800);
+}
+
+async function enviarParaNuvem() {
+  if (!firebaseDisponivel || !usuarioAtual) return;
+  try {
+    await db.collection('users').doc(usuarioAtual.uid).set({
+      contas,
+      categorias,
+      filtros,
+      series,
+      schemaVersion: SCHEMA_VERSION_ATUAL,
+      atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    definirStatusSync('ok');
+  } catch (err) {
+    console.error(err);
+    definirStatusSync('erro');
+  }
+}
+
+function definirStatusSync(estado) {
+  const textoEl = $('#nuvemStatusTexto');
+  const btn = $('#btnNuvem');
+  if (!btn) return;
+  btn.classList.remove('logado', 'sincronizando', 'erro-sync');
+
+  if (estado === 'ok') {
+    btn.classList.add('logado');
+    if (textoEl) { textoEl.textContent = 'Sincronizado'; textoEl.className = 'nuvem-status ok'; }
+  } else if (estado === 'sincronizando') {
+    btn.classList.add('logado', 'sincronizando');
+    if (textoEl) { textoEl.textContent = 'Sincronizando...'; textoEl.className = 'nuvem-status sincronizando'; }
+  } else if (estado === 'erro') {
+    btn.classList.add('erro-sync');
+    if (textoEl) { textoEl.textContent = 'Erro ao sincronizar — vamos tentar de novo'; textoEl.className = 'nuvem-status erro'; }
+  }
+}
+
+function atualizarUINuvem() {
+  $('#nuvemNaoConfigurado').hidden = firebaseDisponivel;
+  $('#nuvemDeslogado').hidden = !firebaseDisponivel || !!usuarioAtual;
+  $('#nuvemLogado').hidden = !firebaseDisponivel || !usuarioAtual;
+
+  $('#btnNuvem').classList.toggle('logado', !!usuarioAtual);
+
+  if (usuarioAtual) {
+    const identificacao = usuarioAtual.email || usuarioAtual.displayName || 'Conta conectada';
+    $('#nuvemEmailLogado').textContent = identificacao;
+    $('#nuvemAvatar').textContent = identificacao.trim().charAt(0).toUpperCase();
+    definirStatusSync('ok');
+  }
+}
+
+function mostrarErroNuvem(msg) {
+  const el = $('#nuvemErro');
+  el.textContent = msg;
+  el.hidden = false;
+}
+function esconderErroNuvem() {
+  const el = $('#nuvemErro');
+  el.hidden = true;
+  el.textContent = '';
+}
+
+function traduzirErroFirebase(err) {
+  const mapa = {
+    'auth/wrong-password': 'Senha incorreta.',
+    'auth/invalid-credential': 'E-mail ou senha incorretos.',
+    'auth/user-not-found': 'Não existe conta com esse e-mail.',
+    'auth/invalid-email': 'E-mail inválido.',
+    'auth/email-already-in-use': 'Já existe uma conta com esse e-mail. Tente entrar em vez de criar.',
+    'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+    'auth/popup-closed-by-user': 'Login cancelado.',
+    'auth/cancelled-popup-request': 'Login cancelado.',
+    'auth/unauthorized-domain': 'Este endereço não está autorizado no Firebase (veja o README).',
+    'auth/too-many-requests': 'Muitas tentativas seguidas. Aguarde alguns minutos e tente de novo.',
+    'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
+  };
+  return mapa[err.code] || 'Não foi possível concluir. Tente novamente.';
+}
+
+$('#btnNuvem').addEventListener('click', () => {
+  atualizarUINuvem();
+  abrirModal('#modalNuvem');
+});
+
+$('#btnLoginGoogle').addEventListener('click', () => {
+  if (!firebaseDisponivel) return;
+  esconderErroNuvem();
+  const provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider)
+    .then(() => fecharTodosModais())
+    .catch((err) => {
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request') {
+        firebase.auth().signInWithRedirect(provider);
+      } else if (err.code !== 'auth/popup-closed-by-user') {
+        mostrarErroNuvem(traduzirErroFirebase(err));
+      }
+    });
+});
+
+$('#formLoginEmail').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!firebaseDisponivel) return;
+  esconderErroNuvem();
+  const email = $('#nuvemEmail').value.trim();
+  const senha = $('#nuvemSenha').value;
+  firebase.auth().signInWithEmailAndPassword(email, senha)
+    .then(() => fecharTodosModais())
+    .catch((err) => mostrarErroNuvem(traduzirErroFirebase(err)));
+});
+
+$('#btnCriarConta').addEventListener('click', () => {
+  if (!firebaseDisponivel) return;
+  esconderErroNuvem();
+  const email = $('#nuvemEmail').value.trim();
+  const senha = $('#nuvemSenha').value;
+  if (!email || !senha) { mostrarErroNuvem('Preencha e-mail e senha para criar a conta.'); return; }
+  firebase.auth().createUserWithEmailAndPassword(email, senha)
+    .then(() => fecharTodosModais())
+    .catch((err) => mostrarErroNuvem(traduzirErroFirebase(err)));
+});
+
+$('#btnEsqueciSenha').addEventListener('click', () => {
+  if (!firebaseDisponivel) return;
+  esconderErroNuvem();
+  const email = $('#nuvemEmail').value.trim();
+  if (!email) { mostrarErroNuvem('Digite seu e-mail no campo acima para receber o link de redefinição.'); return; }
+  firebase.auth().sendPasswordResetEmail(email)
+    .then(() => toast('E-mail de redefinição enviado'))
+    .catch((err) => mostrarErroNuvem(traduzirErroFirebase(err)));
+});
+
+$('#btnLogout').addEventListener('click', () => {
+  firebase.auth().signOut();
+  fecharTodosModais();
+});
+
+/* =========================================================
    RENDER GERAL
    ========================================================= */
 
@@ -1179,6 +1441,8 @@ function renderTudo() {
 ensureRecurringCoverage();
 refreshCategoriaSelects();
 renderTudo();
+inicializarFirebase();
+atualizarUINuvem();
 
 /* Registro do service worker (permite instalar como app / uso offline) */
 if ('serviceWorker' in navigator) {

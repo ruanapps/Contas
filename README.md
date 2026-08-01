@@ -18,7 +18,7 @@ Depois acesse `http://localhost:8000` no navegador.
 ## Publicando no GitHub Pages (para instalar no celular)
 
 1. Crie um repositório no GitHub e suba **todos os arquivos desta pasta soltos na raiz do repositório**
-   (não dentro de uma subpasta) — `index.html`, `style.css`, `app.js`, `manifest.json`, `sw.js` e os `icon-*.png`.
+   (não dentro de uma subpasta) — `index.html`, `style.css`, `app.js`, `firebase-config.js`, `manifest.json`, `sw.js` e os `icon-*.png`.
    Se você arrastar os arquivos direto para a página do GitHub, é exatamente isso que acontece por padrão.
 2. No repositório, vá em **Settings → Pages**.
 3. Em "Source", selecione a branch (`main`) e a pasta `/root`. Salve.
@@ -72,6 +72,54 @@ algum ícone não carregar, aparece um aviso ali) e se o service worker está "a
 - **Categorias personalizáveis**: ao selecionar a categoria (no lançamento ou nos filtros), há a opção "+ Criar nova categoria...". Também é possível abrir "Gerenciar categorias" para renomear ou excluir categorias — contas já lançadas acompanham o novo nome quando uma categoria é renomeada, e mantêm o nome antigo quando ela é excluída.
 - **Campos de valor com máscara**: ao digitar o valor original ou o valor pago, o app formata automaticamente com vírgula e sempre 2 casas decimais (ex.: digitar "1234" vira "12,34"), no padrão brasileiro de moeda. Internamente, os valores são guardados como números inteiros de centavos (não em ponto flutuante), o que evita erros de arredondamento nas somas e totais — o ponto flutuante só aparece rapidamente na exportação/importação do backup em Excel, sempre com arredondamento explícito na volta.
 - **Backup local (Excel)**: o botão ⇅ no topo abre a tela de backup. **Exportar** gera uma planilha `.xlsx` com todos os dados (contas, categorias e filtros) para você guardar onde quiser. **Importar** lê uma dessas planilhas e restaura os dados no aparelho — útil para trocar de celular ou recuperar informações. Importar substitui os dados atuais do app (o app pede confirmação antes).
+- **Sincronização automática na nuvem (opcional)**: o botão ☁ no topo permite entrar com Google ou e-mail/senha. Depois de logado, os dados passam a sincronizar automaticamente entre todos os aparelhos onde você usar a mesma conta — sem precisar exportar/importar nada manualmente. Sem login, o app continua funcionando 100% local como antes. Veja como configurar na seção abaixo.
+
+## Configurando a sincronização na nuvem (Firebase)
+
+Esse recurso é opcional e desligado por padrão — sem configurar nada, o app funciona só com `localStorage`,
+como sempre funcionou. Para ativar a sincronização entre aparelhos, você precisa criar (de graça) um projeto
+Firebase próprio e colar as credenciais dele no app. Leva uns 10 minutos.
+
+1. **Crie um projeto**: acesse [console.firebase.google.com](https://console.firebase.google.com), clique em
+   "Adicionar projeto" e siga o assistente (pode desativar o Google Analytics, não é necessário).
+2. **Registre um app Web**: na tela inicial do projeto, clique no ícone `</>` ("Web"), dê um apelido qualquer
+   e clique em "Registrar app". O Firebase vai mostrar um objeto `firebaseConfig` com `apiKey`, `authDomain`
+   etc. — copie esse objeto inteiro.
+3. **Cole no app**: abra o arquivo `firebase-config.js` (neste projeto) e substitua os valores de exemplo pelos
+   que você copiou.
+4. **Ative os métodos de login**: no menu lateral do Firebase, vá em **Build → Authentication → Get started**.
+   Na aba "Sign-in method", habilite **Google** (é só escolher um e-mail de suporte) e **E-mail/senha**.
+5. **Autorize seu domínio do GitHub Pages**: ainda em Authentication, aba **Settings → Authorized domains**,
+   clique em "Add domain" e adicione o domínio do seu site (ex.: `seu-usuario.github.io`). Sem isso, o login
+   falha com erro de "domínio não autorizado".
+6. **Crie o banco de dados**: no menu lateral, vá em **Build → Firestore Database → Criar banco de dados**.
+   Escolha uma região (qualquer uma do Brasil serve bem) e comece em **modo de produção**.
+7. **Configure as regras de segurança**: na aba "Regras" do Firestore, substitua o conteúdo por:
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /users/{userId} {
+         allow read, write: if request.auth != null && request.auth.uid == userId;
+       }
+     }
+   }
+   ```
+
+   Essas regras são o que garante o isolamento: cada usuário logado só consegue ler ou escrever no próprio
+   documento (`users/{seu-uid}`) — mesmo que tente adivinhar o link ou o ID de outra pessoa, o Firebase nega
+   o acesso.
+8. **Suba o `firebase-config.js` preenchido para o GitHub** (junto com os outros arquivos atualizados) e pronto.
+
+> As chaves em `firebase-config.js` (apiKey, authDomain...) não são segredas — o Firebase foi desenhado para
+> essa configuração ficar pública no código do navegador. A proteção de verdade vem das regras do passo 7, então
+> não tem problema esse arquivo ficar num repositório público.
+
+**Como funciona por baixo dos panos:** a primeira vez que você loga numa conta (Google ou e-mail), o app sobe os
+dados que já estavam salvos localmente naquele aparelho para a nuvem. Em qualquer login seguinte — no mesmo
+aparelho ou em outro — os dados da nuvem é que valem, e ficam sincronizados em tempo real: uma alteração feita
+num aparelho aparece automaticamente nos outros em poucos segundos, sem precisar atualizar a página.
 
 ## Estrutura de arquivos
 
@@ -79,7 +127,8 @@ algum ícone não carregar, aparece um aviso ali) e se o service worker está "a
 contas-a-pagar/
 ├── index.html            → estrutura da página e dos modais
 ├── style.css             → tema visual
-├── app.js                → toda a lógica (dados, recorrência, filtros, renderização)
+├── app.js                → toda a lógica (dados, recorrência, filtros, sincronização, renderização)
+├── firebase-config.js    → credenciais do SEU projeto Firebase (sincronização na nuvem, opcional)
 ├── manifest.json         → configuração de instalação como PWA
 ├── sw.js                 → service worker (cache offline)
 └── icon-*.png            → ícones do app (soltos na raiz, junto dos demais arquivos)
