@@ -90,6 +90,20 @@ let series = loadSeries();
 let filtros = loadFiltros();
 let categorias = loadCategorias();
 
+// Estado da sincronização na nuvem (Firebase). Precisa ficar declarado
+// bem no início do arquivo: a migração de dados logo abaixo já chama
+// saveContas(), que aciona a sincronização — se essas variáveis fossem
+// declaradas mais adiante no arquivo, essa chamada prematura quebraria
+// (ReferenceError de "temporal dead zone") antes do resto do app sequer
+// carregar, especialmente em quem abre o app pela primeira vez.
+let firebaseDisponivel = false;
+let db = null;
+let usuarioAtual = null;
+let unsubscribeSnapshot = null;
+let aplicandoSnapshotRemoto = false;
+let timerSincronizacao = null;
+let tentativasInicializacaoFirebase = 0;
+
 // Versões anteriores do app guardavam valorOriginal/valorPago em reais
 // (ponto flutuante). A partir daqui eles passam a ser inteiros em
 // centavos. Essa migração roda uma única vez, convertendo dados já
@@ -184,9 +198,31 @@ function renderCategoriasModal() {
     lista.appendChild(vazio);
     return;
   }
-  categorias.forEach(cat => {
+  categorias.forEach((cat, index) => {
     const row = document.createElement('div');
     row.className = 'categoria-row';
+
+    const setaWrap = document.createElement('div');
+    setaWrap.className = 'categoria-setas';
+
+    const subir = document.createElement('button');
+    subir.type = 'button';
+    subir.className = 'categoria-seta';
+    subir.textContent = '▲';
+    subir.title = 'Mover para cima';
+    subir.disabled = index === 0;
+    subir.addEventListener('click', () => moverCategoria(index, -1));
+
+    const descer = document.createElement('button');
+    descer.type = 'button';
+    descer.className = 'categoria-seta';
+    descer.textContent = '▼';
+    descer.title = 'Mover para baixo';
+    descer.disabled = index === categorias.length - 1;
+    descer.addEventListener('click', () => moverCategoria(index, 1));
+
+    setaWrap.appendChild(subir);
+    setaWrap.appendChild(descer);
 
     const nome = document.createElement('span');
     nome.className = 'categoria-nome';
@@ -211,10 +247,22 @@ function renderCategoriasModal() {
 
     acoes.appendChild(editar);
     acoes.appendChild(excluir);
+    row.appendChild(setaWrap);
     row.appendChild(nome);
     row.appendChild(acoes);
     lista.appendChild(row);
   });
+}
+
+// Muda a posição de uma categoria na lista (direcao: -1 sobe, 1 desce).
+// A ordem da lista é a mesma usada para popular os seletores de categoria.
+function moverCategoria(index, direcao) {
+  const novoIndex = index + direcao;
+  if (novoIndex < 0 || novoIndex >= categorias.length) return;
+  [categorias[index], categorias[novoIndex]] = [categorias[novoIndex], categorias[index]];
+  saveCategorias(categorias);
+  refreshCategoriaSelects();
+  renderCategoriasModal();
 }
 
 function ativarEdicaoCategoria(row, catOriginal) {
@@ -1223,15 +1271,6 @@ $('#inputImportarBackup').addEventListener('change', (e) => {
    isolamento é garantido pelas regras de segurança do Firestore (veja
    o README), não por lógica no cliente.
    ========================================================= */
-
-let firebaseDisponivel = false;
-let db = null;
-let usuarioAtual = null;
-let unsubscribeSnapshot = null;
-let aplicandoSnapshotRemoto = false;
-let timerSincronizacao = null;
-
-let tentativasInicializacaoFirebase = 0;
 
 function inicializarFirebase() {
   try {
