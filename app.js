@@ -202,27 +202,11 @@ function renderCategoriasModal() {
     const row = document.createElement('div');
     row.className = 'categoria-row';
 
-    const setaWrap = document.createElement('div');
-    setaWrap.className = 'categoria-setas';
-
-    const subir = document.createElement('button');
-    subir.type = 'button';
-    subir.className = 'categoria-seta';
-    subir.textContent = '▲';
-    subir.title = 'Mover para cima';
-    subir.disabled = index === 0;
-    subir.addEventListener('click', () => moverCategoria(index, -1));
-
-    const descer = document.createElement('button');
-    descer.type = 'button';
-    descer.className = 'categoria-seta';
-    descer.textContent = '▼';
-    descer.title = 'Mover para baixo';
-    descer.disabled = index === categorias.length - 1;
-    descer.addEventListener('click', () => moverCategoria(index, 1));
-
-    setaWrap.appendChild(subir);
-    setaWrap.appendChild(descer);
+    const handle = document.createElement('div');
+    handle.className = 'categoria-handle';
+    handle.textContent = '⠿';
+    handle.title = 'Pressione e arraste para reordenar';
+    handle.addEventListener('pointerdown', (e) => iniciarArrastoCategoria(e, index));
 
     const nome = document.createElement('span');
     nome.className = 'categoria-nome';
@@ -247,21 +231,87 @@ function renderCategoriasModal() {
 
     acoes.appendChild(editar);
     acoes.appendChild(excluir);
-    row.appendChild(setaWrap);
+    row.appendChild(handle);
     row.appendChild(nome);
     row.appendChild(acoes);
     lista.appendChild(row);
   });
 }
 
-// Muda a posição de uma categoria na lista (direcao: -1 sobe, 1 desce).
-// A ordem da lista é a mesma usada para popular os seletores de categoria.
-function moverCategoria(index, direcao) {
-  const novoIndex = index + direcao;
-  if (novoIndex < 0 || novoIndex >= categorias.length) return;
-  [categorias[index], categorias[novoIndex]] = [categorias[novoIndex], categorias[index]];
-  saveCategorias(categorias);
-  refreshCategoriaSelects();
+/* ---------- Arrastar para reordenar categorias (pointer events) ---------- */
+
+let arrastoCategoria = null;
+
+function iniciarArrastoCategoria(e, index) {
+  e.preventDefault();
+  const row = e.currentTarget.closest('.categoria-row');
+  const lista = $('#categoriasLista');
+  const linhas = Array.from(lista.querySelectorAll('.categoria-row'));
+
+  arrastoCategoria = {
+    fromIndex: index,
+    currentIndex: index,
+    pointerId: e.pointerId,
+    rowEl: row,
+    startClientY: e.clientY,
+    rowHeight: row.getBoundingClientRect().height,
+    linhas: linhas.map((el, i) => ({ el, index: i, top: el.getBoundingClientRect().top })),
+  };
+
+  row.classList.add('categoria-row--arrastando');
+  row.setPointerCapture(e.pointerId);
+  row.addEventListener('pointermove', moverArrastoCategoria);
+  row.addEventListener('pointerup', soltarArrastoCategoria);
+  row.addEventListener('pointercancel', soltarArrastoCategoria);
+}
+
+function moverArrastoCategoria(e) {
+  if (!arrastoCategoria || e.pointerId !== arrastoCategoria.pointerId) return;
+  const { fromIndex, rowEl, rowHeight, linhas, startClientY } = arrastoCategoria;
+  const deltaY = e.clientY - startClientY;
+  rowEl.style.transform = `translateY(${deltaY}px)`;
+
+  const origem = linhas[fromIndex];
+  const centroArrastado = origem.top + rowHeight / 2 + deltaY;
+
+  let novoIndex = fromIndex;
+  linhas.forEach((l) => {
+    if (l.index === fromIndex) return;
+    const centroOutra = l.top + rowHeight / 2;
+    if (l.index < fromIndex && centroArrastado < centroOutra) novoIndex = Math.min(novoIndex, l.index);
+    if (l.index > fromIndex && centroArrastado > centroOutra) novoIndex = Math.max(novoIndex, l.index);
+  });
+  arrastoCategoria.currentIndex = novoIndex;
+
+  // Abre espaço deslocando visualmente as linhas entre a origem e o alvo
+  linhas.forEach((l) => {
+    if (l.index === fromIndex) return;
+    let offset = 0;
+    if (novoIndex > fromIndex && l.index > fromIndex && l.index <= novoIndex) offset = -rowHeight;
+    else if (novoIndex < fromIndex && l.index < fromIndex && l.index >= novoIndex) offset = rowHeight;
+    l.el.style.transform = offset ? `translateY(${offset}px)` : '';
+  });
+}
+
+function soltarArrastoCategoria(e) {
+  if (!arrastoCategoria || e.pointerId !== arrastoCategoria.pointerId) return;
+  const { fromIndex, currentIndex, rowEl, linhas } = arrastoCategoria;
+
+  rowEl.removeEventListener('pointermove', moverArrastoCategoria);
+  rowEl.removeEventListener('pointerup', soltarArrastoCategoria);
+  rowEl.removeEventListener('pointercancel', soltarArrastoCategoria);
+  rowEl.classList.remove('categoria-row--arrastando');
+  rowEl.style.transform = '';
+  linhas.forEach((l) => { l.el.style.transform = ''; });
+
+  arrastoCategoria = null;
+
+  if (currentIndex !== fromIndex) {
+    const [item] = categorias.splice(fromIndex, 1);
+    categorias.splice(currentIndex, 0, item);
+    saveCategorias(categorias);
+    refreshCategoriaSelects();
+  }
   renderCategoriasModal();
 }
 
