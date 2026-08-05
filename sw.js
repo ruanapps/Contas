@@ -1,4 +1,4 @@
-const CACHE_NAME = 'contas-a-pagar-v12';
+const CACHE_NAME = 'contas-a-pagar-v15';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,35 @@ const ASSETS = [
   './icon-maskable-192.png',
   './icon-maskable-512.png',
 ];
+
+// ---------- Notificações push (Firebase Cloud Messaging) ----------
+// Totalmente opcional e isolado em try/catch: se a VAPID key ainda não
+// foi configurada, ou o navegador não suportar, isso simplesmente não
+// ativa — o resto do service worker (cache/offline) continua funcionando
+// normalmente de qualquer jeito.
+try {
+  importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
+  importScripts('firebase-config.js');
+
+  if (typeof firebaseConfig !== 'undefined' && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('COLE_AQUI')) {
+    firebase.initializeApp(firebaseConfig);
+    const messaging = firebase.messaging();
+
+    messaging.onBackgroundMessage((payload) => {
+      const titulo = (payload.notification && payload.notification.title) || 'Contas a Pagar';
+      const corpo = (payload.notification && payload.notification.body) || '';
+      self.registration.showNotification(titulo, {
+        body: corpo,
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        tag: (payload.data && payload.data.tag) || undefined,
+      });
+    });
+  }
+} catch (err) {
+  console.warn('Notificações push (FCM) não inicializadas no service worker:', err);
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

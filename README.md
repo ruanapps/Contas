@@ -20,6 +20,8 @@ Depois acesse `http://localhost:8000` no navegador.
 1. Crie um repositório no GitHub e suba **todos os arquivos desta pasta soltos na raiz do repositório**
    (não dentro de uma subpasta) — `index.html`, `style.css`, `app.js`, `firebase-config.js`, `manifest.json`, `sw.js` e os `icon-*.png`.
    Se você arrastar os arquivos direto para a página do GitHub, é exatamente isso que acontece por padrão.
+   A pasta `functions/` e os arquivos `firebase.json`/`.firebaserc` também podem subir junto (não atrapalham
+   o site) — eles só são usados se você seguir o tutorial de notificações push, mais abaixo.
 2. No repositório, vá em **Settings → Pages**.
 3. Em "Source", selecione a branch (`main`) e a pasta `/root`. Salve.
 4. Aguarde alguns minutos até o GitHub gerar a URL (algo como `https://seu-usuario.github.io/nome-do-repo/`).
@@ -69,10 +71,13 @@ algum ícone não carregar, aparece um aviso ali) e se o service worker está "a
 - **Cobrança recorrente**: ao marcar a caixa "Cobrança recorrente", o app gera automaticamente lançamentos mensais para os próximos 12 meses. Esse horizonte de 12 meses é mantido sempre à frente — a cada mês que passa, um novo lançamento é adicionado ao final da série. Ao desmarcar a recorrência de uma conta, o app pergunta se deseja excluir todas as cobranças futuras dessa série (mantendo a conta atual e as já pagas).
 - **Aba "Por Período"**: navegação mês a mês e criação de filtros personalizados (categoria, status, intervalo de datas) que ficam fixados como chips reutilizáveis.
 - **Sugestões de nome**: ao escolher a categoria, o campo "Nome da conta" passa a sugerir (mas não obriga) nomes já usados antes naquela mesma categoria — ex.: em "Assinaturas", sugere "Netflix", "Spotify"... se já tiverem sido lançados. O campo continua livre para digitar qualquer coisa.
-- **Categorias personalizáveis**: ao selecionar a categoria (no lançamento ou nos filtros), há a opção "+ Criar nova categoria...". Também é possível abrir "Gerenciar categorias" para renomear, reordenar (setas ▲▼) ou excluir categorias — contas já lançadas acompanham o novo nome quando uma categoria é renomeada, e mantêm o nome antigo quando ela é excluída. A ordem definida aqui é a mesma que aparece nos seletores de categoria.
+- **Pago com Cartão de Crédito**: ao marcar uma conta como paga (ou editar uma já paga), há a opção "Pago com Cartão de Crédito". Quando marcada, o valor dessa conta **não entra nos somatórios agregados** (total do período, etc.) — a lógica é que o dinheiro só sai de verdade quando a fatura do cartão vence e é paga (lançada como sua própria conta), então contar os dois ao mesmo tempo duplicaria o gasto. A conta continua aparecendo normalmente na aba "Pagas", só com um ícone 💳 indicando que está fora dos totais.
+- **Categorias personalizáveis**: ao selecionar a categoria (no lançamento ou nos filtros), há a opção "+ Criar nova categoria...". Também é possível abrir "Gerenciar categorias" para renomear, reordenar (pressione e arraste pela alça ⠿ à esquerda) ou excluir categorias — contas já lançadas acompanham o novo nome quando uma categoria é renomeada, e mantêm o nome antigo quando ela é excluída. A ordem definida aqui é a mesma que aparece nos seletores de categoria.
 - **Campos de valor com máscara**: ao digitar o valor original ou o valor pago, o app formata automaticamente com vírgula e sempre 2 casas decimais (ex.: digitar "1234" vira "12,34"), no padrão brasileiro de moeda. Internamente, os valores são guardados como números inteiros de centavos (não em ponto flutuante), o que evita erros de arredondamento nas somas e totais — o ponto flutuante só aparece rapidamente na exportação/importação do backup em Excel, sempre com arredondamento explícito na volta.
-- **Backup local (Excel)**: o botão ⇅ no topo abre a tela de backup. **Exportar** gera uma planilha `.xlsx` com todos os dados (contas, categorias e filtros) para você guardar onde quiser. **Importar** lê uma dessas planilhas e restaura os dados no aparelho — útil para trocar de celular ou recuperar informações. Importar substitui os dados atuais do app (o app pede confirmação antes).
-- **Sincronização automática na nuvem (opcional)**: o botão ☁ no topo permite entrar com Google ou e-mail/senha. Depois de logado, os dados passam a sincronizar automaticamente entre todos os aparelhos onde você usar a mesma conta — sem precisar exportar/importar nada manualmente. Sem login, o app continua funcionando 100% local como antes. Veja como configurar na seção abaixo.
+- **Menu de Opções**: o botão ⚙ no topo reúne Sincronização na nuvem, Backup local e Notificações num só lugar, como uma tela de configurações do app.
+- **Backup local (Excel)**: dentro de Opções → Backup local. **Exportar** gera uma planilha `.xlsx` com todos os dados (contas, categorias, filtros e notificações) para você guardar onde quiser. **Importar** lê uma dessas planilhas e restaura os dados no aparelho — útil para trocar de celular ou recuperar informações. Importar substitui os dados atuais do app (o app pede confirmação antes).
+- **Notificações**: dentro de Opções → Notificações. Crie quantas regras quiser, cada uma com "X dias antes do vencimento" (0 = no próprio dia) e um horário livre — todas as contas pendentes usam essas mesmas regras. É preciso ativar a permissão de notificação do navegador uma vez. Por padrão, os avisos são conferidos quando o app está aberto (em uso ou minimizado). Para notificações mesmo com o app **totalmente fechado** (como um app nativo), veja [`PUSH_NOTIFICACOES.md`](./PUSH_NOTIFICACOES.md) — é um passo a passo opcional à parte, porque exige configurar uma Cloud Function no Firebase.
+- **Sincronização automática na nuvem (opcional)**: dentro de Opções → Sincronização na nuvem, dá para entrar com Google ou e-mail/senha. Depois de logado, os dados passam a sincronizar automaticamente entre todos os aparelhos onde você usar a mesma conta — sem precisar exportar/importar nada manualmente. Sem login, o app continua funcionando 100% local como antes. Veja como configurar na seção abaixo.
 
 ## Configurando a sincronização na nuvem (Firebase)
 
@@ -125,11 +130,18 @@ num aparelho aparece automaticamente nos outros em poucos segundos, sem precisar
 
 ```
 contas-a-pagar/
-├── index.html            → estrutura da página e dos modais
-├── style.css             → tema visual
-├── app.js                → toda a lógica (dados, recorrência, filtros, sincronização, renderização)
-├── firebase-config.js    → credenciais do SEU projeto Firebase (sincronização na nuvem, opcional)
-├── manifest.json         → configuração de instalação como PWA
-├── sw.js                 → service worker (cache offline)
-└── icon-*.png            → ícones do app (soltos na raiz, junto dos demais arquivos)
+├── index.html              → estrutura da página e dos modais
+├── style.css               → tema visual
+├── app.js                  → toda a lógica (dados, recorrência, filtros, sincronização, renderização)
+├── firebase-config.js      → credenciais do SEU projeto Firebase (sincronização, opcional)
+├── manifest.json           → configuração de instalação como PWA
+├── sw.js                   → service worker (cache offline + notificações push em segundo plano)
+├── icon-*.png              → ícones do app (soltos na raiz, junto dos demais arquivos)
+├── PUSH_NOTIFICACOES.md    → tutorial opcional: notificações mesmo com o app fechado
+├── firebase.json           → aponta o Firebase CLI para a pasta functions/ e para firestore.rules
+├── firestore.rules         → regras de segurança do Firestore (isolamento por usuário)
+├── .firebaserc             → identifica o projeto Firebase (contas-c655b)
+└── functions/               → Cloud Function das notificações push (só usada se você seguir o tutorial acima)
+    ├── index.js
+    └── package.json
 ```

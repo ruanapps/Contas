@@ -42,6 +42,8 @@ const SERIES_KEY = 'contasPagar.series';
 const FILTROS_KEY = 'contasPagar.filtros';
 const CATEGORIAS_KEY = 'contasPagar.categorias';
 const CATEGORIAS_PADRAO = ['Moradia', 'Contas fixas', 'Cartão de crédito', 'Transporte', 'Saúde', 'Educação', 'Alimentação', 'Lazer', 'Assinaturas', 'Impostos', 'Outros'];
+const NOTIFICACOES_KEY = 'contasPagar.notificacoes';
+const NOTIFICACOES_ENVIADAS_KEY = 'contasPagar.notificacoesEnviadas';
 
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
@@ -84,11 +86,20 @@ function saveCategorias(cats) {
   localStorage.setItem(CATEGORIAS_KEY, JSON.stringify(cats));
   agendarSincronizacaoNuvem();
 }
+function loadNotificacoes() {
+  try { return JSON.parse(localStorage.getItem(NOTIFICACOES_KEY)) || []; }
+  catch { return []; }
+}
+function saveNotificacoes(regras) {
+  localStorage.setItem(NOTIFICACOES_KEY, JSON.stringify(regras));
+  agendarSincronizacaoNuvem();
+}
 
 let contas = loadContas();
 let series = loadSeries();
 let filtros = loadFiltros();
 let categorias = loadCategorias();
+let notificacoes = loadNotificacoes();
 
 // Estado da sincronização na nuvem (Firebase). Precisa ficar declarado
 // bem no início do arquivo: a migração de dados logo abaixo já chama
@@ -102,6 +113,7 @@ let usuarioAtual = null;
 let unsubscribeSnapshot = null;
 let aplicandoSnapshotRemoto = false;
 let timerSincronizacao = null;
+let fcmTokenAtual = null;
 let tentativasInicializacaoFirebase = 0;
 
 // Versões anteriores do app guardavam valorOriginal/valorPago em reais
@@ -535,6 +547,14 @@ function isVencida(conta) {
   return conta.status === 'pendente' && conta.dataVencimento < hojeISO();
 }
 
+// Contas pagas com cartão de crédito ficam de fora dos somatórios
+// agregados (totais de período, etc.) — o valor só volta a contar quando
+// a fatura do cartão em si vencer e for lançada como sua própria conta,
+// evitando contar o mesmo gasto duas vezes.
+function entraNoSomatorio(conta) {
+  return !(conta.status === 'pago' && conta.pagoComCartao);
+}
+
 /* =========================================================
    RECORRÊNCIA
    ========================================================= */
@@ -633,6 +653,14 @@ function criarLinhaConta(conta, { mostrarDataPagamento = false } = {}) {
     meta.appendChild(rec);
   }
 
+  if (conta.status === 'pago' && conta.pagoComCartao) {
+    const cartao = document.createElement('span');
+    cartao.className = 'cartao-icon';
+    cartao.textContent = '💳';
+    cartao.title = 'Pago com cartão de crédito — fora dos somatórios';
+    meta.appendChild(cartao);
+  }
+
   info.appendChild(nome);
   info.appendChild(meta);
 
@@ -680,8 +708,7 @@ function renderResumo() {
   const vencidasMes = pendentesMes.filter(isVencida);
 
   const totalPendente = pendentesMes.reduce((s, c) => s + Number(c.valorOriginal), 0);
-  const totalGeralMes = doMes.reduce((s, c) => s + Number(c.valorOriginal), 0);
-  const pct = totalGeralMes > 0 ? Math.round((pagasMes.length / doMes.length) * 100) : 0;
+  const pct = doMes.length > 0 ? Math.round((pagasMes.length / doMes.length) * 100) : 0;
 
   $('#summaryPendenteValor').textContent = formatBRL(totalPendente);
   $('#summaryVencidas').textContent = vencidasMes.length;
@@ -732,7 +759,7 @@ function renderPeriodo() {
   doMes.forEach(c => container.appendChild(criarLinhaConta(c, { mostrarDataPagamento: c.status === 'pago' })));
   $('#emptyPeriodo').hidden = doMes.length > 0;
 
-  const total = doMes.reduce((s, c) => s + Number(c.valorOriginal), 0);
+  const total = doMes.filter(entraNoSomatorio).reduce((s, c) => s + Number(c.valorOriginal), 0);
   const pagas = doMes.filter(c => c.status === 'pago').length;
   $('#periodoResumo').innerHTML = `<strong>${doMes.length}</strong> conta(s) · <strong>${formatBRL(total)}</strong> no total · <strong>${pagas}</strong> paga(s)`;
 
@@ -836,6 +863,15 @@ $$('[data-close]').forEach(btn => {
   btn.addEventListener('click', () => btn.closest('.modal-overlay').hidden = true);
 });
 
+$('#btnOpcoes').addEventListener('click', () => abrirModal('#modalOpcoes'));
+
+$$('[data-voltar-opcoes]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    fecharTodosModais();
+    abrirModal('#modalOpcoes');
+  });
+});
+
 let toastTimer = null;
 function toast(msg) {
   const el = $('#toast');
@@ -877,6 +913,7 @@ function abrirDetalhe(id) {
   }
 
   $('#detRecorrenteTag').hidden = !conta.recorrente;
+  $('#detCartaoTag').hidden = !(conta.status === 'pago' && conta.pagoComCartao);
 
   $('#btnMarcarPago').style.display = conta.status === 'pago' ? 'none' : '';
   $('#btnMarcarPago').textContent = 'Marcar como pago';
@@ -961,6 +998,7 @@ function preencherFormComConta(conta) {
   $('#fDataPagamento').value = conta.dataPagamento || '';
   $('#fObservacoes').value = conta.observacoes || '';
   $('#fRecorrente').checked = !!conta.recorrente;
+  $('#fPagoComCartao').checked = !!conta.pagoComCartao;
 }
 
 function abrirFormEdicao(id) {
@@ -1063,6 +1101,7 @@ $('#formConta').addEventListener('submit', (e) => {
     dataPagamento: $('#fDataPagamento').value || null,
     observacoes: $('#fObservacoes').value.trim(),
     recorrente: $('#fRecorrente').checked,
+    pagoComCartao: $('#fPagoComCartao').checked,
   };
 
   if (modoForm === 'novo') {
@@ -1140,10 +1179,11 @@ $('#formConta').addEventListener('submit', (e) => {
    BACKUP LOCAL (exportar / importar planilha .xlsx)
    ========================================================= */
 
-const COLUNAS_CONTAS = ['id', 'categoria', 'nome', 'valorOriginal', 'dataVencimento', 'valorPago', 'dataPagamento', 'observacoes', 'recorrente', 'recorrenciaId', 'status'];
+const COLUNAS_CONTAS = ['id', 'categoria', 'nome', 'valorOriginal', 'dataVencimento', 'valorPago', 'dataPagamento', 'pagoComCartao', 'observacoes', 'recorrente', 'recorrenciaId', 'status'];
 const COLUNAS_CATEGORIAS = ['nome'];
 const COLUNAS_FILTROS = ['id', 'nome', 'categoria', 'status', 'dataInicio', 'dataFim'];
 const COLUNAS_SERIES = ['recorrenciaId', 'ativo'];
+const COLUNAS_NOTIFICACOES = ['id', 'diasAntes', 'horario'];
 
 function planilhaDe(linhas, colunas) {
   if (!linhas.length) return XLSX.utils.aoa_to_sheet([colunas]);
@@ -1178,6 +1218,7 @@ function exportarBackup() {
     planilhaDe(Object.keys(series).map(id => ({ recorrenciaId: id, ativo: !!series[id].ativo })), COLUNAS_SERIES),
     'Series'
   );
+  XLSX.utils.book_append_sheet(wb, planilhaDe(notificacoes, COLUNAS_NOTIFICACOES), 'Notificacoes');
 
   XLSX.writeFile(wb, `contas-a-pagar-backup-${hojeISO()}.xlsx`);
   toast('Backup exportado');
@@ -1243,6 +1284,7 @@ function importarBackup(file) {
     const categoriasRows = lerAba(wb, 'Categorias');
     const filtrosRows = lerAba(wb, 'Filtros');
     const seriesRows = lerAba(wb, 'Series');
+    const notificacoesRows = lerAba(wb, 'Notificacoes');
 
     if (contasRows.length === 0 && categoriasRows.length === 0) {
       toast('Esse arquivo não parece ser um backup válido deste app.');
@@ -1262,6 +1304,7 @@ function importarBackup(file) {
             dataVencimento: normalizarDataImportada(r.dataVencimento) || hojeISO(),
             valorPago: reaisParaCentavosOuNull(r.valorPago),
             dataPagamento: normalizarDataImportada(r.dataPagamento),
+            pagoComCartao: paraBooleano(r.pagoComCartao),
             observacoes: r.observacoes || '',
             recorrente: paraBooleano(r.recorrente),
             recorrenciaId: r.recorrenciaId ? String(r.recorrenciaId) : null,
@@ -1287,10 +1330,19 @@ function importarBackup(file) {
           if (r.recorrenciaId) series[String(r.recorrenciaId)] = { ativo: paraBooleano(r.ativo) };
         });
 
+        notificacoes = notificacoesRows
+          .filter(r => r.horario)
+          .map(r => ({
+            id: r.id ? String(r.id) : uid(),
+            diasAntes: Math.max(0, parseInt(r.diasAntes, 10) || 0),
+            horario: /^\d{2}:\d{2}$/.test(String(r.horario)) ? String(r.horario) : '09:00',
+          }));
+
         saveContas(contas);
         saveCategorias(categorias);
         saveFiltros(filtros);
         saveSeries(series);
+        saveNotificacoes(notificacoes);
         filtroAtivoId = null;
 
         ensureRecurringCoverage();
@@ -1303,7 +1355,10 @@ function importarBackup(file) {
   reader.readAsArrayBuffer(file);
 }
 
-$('#btnBackup').addEventListener('click', () => abrirModal('#modalBackup'));
+$('#btnAbrirBackup').addEventListener('click', () => {
+  fecharTodosModais();
+  abrirModal('#modalBackup');
+});
 $('#btnExportarBackup').addEventListener('click', exportarBackup);
 $('#btnImportarBackup').addEventListener('click', () => $('#inputImportarBackup').click());
 $('#inputImportarBackup').addEventListener('change', (e) => {
@@ -1384,9 +1439,16 @@ async function aoLogar(user) {
     console.error(err);
     definirStatusSync('erro');
   }
+  tentarRegistrarPush();
 }
 
 function aoDeslogar() {
+  if (usuarioAtual && fcmTokenAtual && db) {
+    db.collection('users').doc(usuarioAtual.uid)
+      .update({ fcmTokens: firebase.firestore.FieldValue.arrayRemove(fcmTokenAtual) })
+      .catch(() => {});
+  }
+  fcmTokenAtual = null;
   usuarioAtual = null;
   pararEscutaNuvem();
   atualizarUINuvem();
@@ -1418,11 +1480,13 @@ function aplicarDadosRemotos(dados) {
   categorias = (Array.isArray(dados.categorias) && dados.categorias.length) ? dados.categorias : [...CATEGORIAS_PADRAO];
   filtros = Array.isArray(dados.filtros) ? dados.filtros : [];
   series = (dados.series && typeof dados.series === 'object') ? dados.series : {};
+  notificacoes = Array.isArray(dados.notificacoes) ? dados.notificacoes : [];
 
   saveContas(contas);
   saveCategorias(categorias);
   saveFiltros(filtros);
   saveSeries(series);
+  saveNotificacoes(notificacoes);
   localStorage.setItem(SCHEMA_VERSION_KEY, String(SCHEMA_VERSION_ATUAL));
 
   filtroAtivoId = null;
@@ -1430,6 +1494,7 @@ function aplicarDadosRemotos(dados) {
   refreshCategoriaSelects();
   renderTudo();
   if (!$('#modalCategorias').hidden) renderCategoriasModal();
+  if (!$('#modalNotificacoes').hidden) renderNotificacoesModal();
 
   aplicandoSnapshotRemoto = false;
 }
@@ -1452,6 +1517,7 @@ async function enviarParaNuvem() {
       categorias,
       filtros,
       series,
+      notificacoes,
       schemaVersion: SCHEMA_VERSION_ATUAL,
       atualizadoEm: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -1464,19 +1530,17 @@ async function enviarParaNuvem() {
 
 function definirStatusSync(estado) {
   const textoEl = $('#nuvemStatusTexto');
-  const btn = $('#btnNuvem');
-  if (!btn) return;
-  btn.classList.remove('logado', 'sincronizando', 'erro-sync');
+  if (!textoEl) return;
 
   if (estado === 'ok') {
-    btn.classList.add('logado');
-    if (textoEl) { textoEl.textContent = 'Sincronizado'; textoEl.className = 'nuvem-status ok'; }
+    textoEl.textContent = 'Sincronizado';
+    textoEl.className = 'nuvem-status ok';
   } else if (estado === 'sincronizando') {
-    btn.classList.add('logado', 'sincronizando');
-    if (textoEl) { textoEl.textContent = 'Sincronizando...'; textoEl.className = 'nuvem-status sincronizando'; }
+    textoEl.textContent = 'Sincronizando...';
+    textoEl.className = 'nuvem-status sincronizando';
   } else if (estado === 'erro') {
-    btn.classList.add('erro-sync');
-    if (textoEl) { textoEl.textContent = 'Erro ao sincronizar — vamos tentar de novo'; textoEl.className = 'nuvem-status erro'; }
+    textoEl.textContent = 'Erro ao sincronizar — vamos tentar de novo';
+    textoEl.className = 'nuvem-status erro';
   }
 }
 
@@ -1484,8 +1548,6 @@ function atualizarUINuvem() {
   $('#nuvemNaoConfigurado').hidden = firebaseDisponivel;
   $('#nuvemDeslogado').hidden = !firebaseDisponivel || !!usuarioAtual;
   $('#nuvemLogado').hidden = !firebaseDisponivel || !usuarioAtual;
-
-  $('#btnNuvem').classList.toggle('logado', !!usuarioAtual);
 
   if (usuarioAtual) {
     const identificacao = usuarioAtual.email || usuarioAtual.displayName || 'Conta conectada';
@@ -1523,7 +1585,8 @@ function traduzirErroFirebase(err) {
   return mapa[err.code] || 'Não foi possível concluir. Tente novamente.';
 }
 
-$('#btnNuvem').addEventListener('click', () => {
+$('#btnAbrirNuvem').addEventListener('click', () => {
+  fecharTodosModais();
   atualizarUINuvem();
   abrirModal('#modalNuvem');
 });
@@ -1581,6 +1644,276 @@ $('#btnLogout').addEventListener('click', () => {
 });
 
 /* =========================================================
+   NOTIFICAÇÕES
+
+   Regras totalmente personalizáveis: cada uma diz "avisar N dias antes
+   do vencimento, às HH:MM" (N=0 é "no próprio dia"). Podem existir
+   várias regras ao mesmo tempo. Elas se aplicam a toda conta pendente,
+   não é preciso configurar por conta.
+
+   Limitação honesta: sem um servidor por trás (isso é um site estático),
+   não dá pra garantir o disparo com o app 100% fechado. A verificação
+   roda quando o app é aberto e periodicamente enquanto estiver aberto —
+   é o melhor possível nesse formato, mas não é 100% como um app nativo.
+   ========================================================= */
+
+$('#btnAbrirNotificacoes').addEventListener('click', () => {
+  fecharTodosModais();
+  renderNotificacoesModal();
+  abrirModal('#modalNotificacoes');
+});
+
+function suportaNotificacoes() {
+  return 'Notification' in window && 'serviceWorker' in navigator;
+}
+
+function atualizarUIPermissaoNotificacoes() {
+  const texto = $('#notifPermissaoTexto');
+  const btnAtivar = $('#btnAtivarNotificacoes');
+
+  if (!suportaNotificacoes()) {
+    texto.textContent = 'Este navegador não é compatível com notificações.';
+    btnAtivar.hidden = true;
+    return;
+  }
+
+  const permissao = Notification.permission;
+  if (permissao === 'granted') {
+    texto.textContent = 'Notificações ativadas neste navegador.';
+    btnAtivar.hidden = true;
+  } else if (permissao === 'denied') {
+    texto.textContent = 'Notificações bloqueadas para este site. Ative manualmente nas configurações do navegador para receber os avisos.';
+    btnAtivar.hidden = true;
+  } else {
+    texto.textContent = 'Ative as notificações para receber avisos de vencimento no horário que você configurar abaixo.';
+    btnAtivar.hidden = false;
+  }
+}
+
+$('#btnAtivarNotificacoes').addEventListener('click', async () => {
+  if (!suportaNotificacoes()) return;
+  try {
+    await Notification.requestPermission();
+  } catch (err) {
+    console.error(err);
+  }
+  atualizarUIPermissaoNotificacoes();
+  verificarNotificacoesPendentes();
+  tentarRegistrarPush();
+});
+
+// Registra (ou renova) o token de notificações push deste aparelho/navegador
+// no Firestore, e liga o recebimento de push com o app aberto em primeiro
+// plano. Totalmente best-effort: qualquer falha aqui (VAPID não configurada,
+// navegador sem suporte, etc.) não afeta o resto do app.
+async function tentarRegistrarPush() {
+  try {
+    if (!firebaseDisponivel || !usuarioAtual || !db) return;
+    if (!suportaNotificacoes() || Notification.permission !== 'granted') return;
+    if (typeof firebase.messaging !== 'function') return;
+    if (!firebaseConfig.vapidKey || firebaseConfig.vapidKey.includes('COLE_AQUI')) return;
+
+    if (firebase.messaging.isSupported) {
+      const resultado = firebase.messaging.isSupported();
+      const suportado = (resultado && typeof resultado.then === 'function') ? await resultado : !!resultado;
+      if (!suportado) return;
+    }
+
+    const messaging = firebase.messaging();
+    const registration = await navigator.serviceWorker.ready;
+    const token = await messaging.getToken({
+      vapidKey: firebaseConfig.vapidKey,
+      serviceWorkerRegistration: registration,
+    });
+
+    if (token && token !== fcmTokenAtual) {
+      fcmTokenAtual = token;
+      await db.collection('users').doc(usuarioAtual.uid).set(
+        { fcmTokens: firebase.firestore.FieldValue.arrayUnion(token) },
+        { merge: true }
+      );
+    }
+
+    // Com o app aberto em primeiro plano, o FCM não mostra a notificação
+    // sozinho — precisamos exibi-la manualmente.
+    messaging.onMessage((payload) => {
+      const titulo = (payload.notification && payload.notification.title) || 'Contas a Pagar';
+      const corpo = (payload.notification && payload.notification.body) || '';
+      registration.showNotification(titulo, { body: corpo, icon: 'icon-192.png', badge: 'icon-192.png' });
+    });
+  } catch (err) {
+    console.error('Não foi possível registrar notificações push:', err);
+  }
+}
+
+function descricaoRegra(diasAntes) {
+  if (diasAntes === 0) return 'No dia do vencimento';
+  if (diasAntes === 1) return '1 dia antes do vencimento';
+  return `${diasAntes} dias antes do vencimento`;
+}
+
+function renderNotificacoesModal() {
+  atualizarUIPermissaoNotificacoes();
+
+  const lista = $('#notifLista');
+  lista.innerHTML = '';
+
+  if (notificacoes.length === 0) {
+    const vazio = document.createElement('div');
+    vazio.className = 'notif-vazio';
+    vazio.textContent = 'Nenhuma notificação configurada ainda.';
+    lista.appendChild(vazio);
+    return;
+  }
+
+  notificacoes.forEach((regra) => {
+    const row = document.createElement('div');
+    row.className = 'notif-row';
+
+    const campos = document.createElement('div');
+    campos.className = 'notif-row-fields';
+
+    const campoDias = document.createElement('div');
+    campoDias.className = 'notif-field';
+    const labelDias = document.createElement('label');
+    labelDias.textContent = descricaoRegra(regra.diasAntes);
+    const inputDias = document.createElement('input');
+    inputDias.type = 'number';
+    inputDias.min = '0';
+    inputDias.max = '90';
+    inputDias.value = regra.diasAntes;
+    inputDias.addEventListener('input', () => {
+      const valor = Math.max(0, Math.min(90, parseInt(inputDias.value, 10) || 0));
+      regra.diasAntes = valor;
+      labelDias.textContent = descricaoRegra(valor);
+      saveNotificacoes(notificacoes);
+    });
+    campoDias.appendChild(labelDias);
+    campoDias.appendChild(inputDias);
+
+    const campoHorario = document.createElement('div');
+    campoHorario.className = 'notif-field';
+    const labelHorario = document.createElement('label');
+    labelHorario.textContent = 'Horário';
+    const inputHorario = document.createElement('input');
+    inputHorario.type = 'time';
+    inputHorario.value = regra.horario;
+    inputHorario.addEventListener('input', () => {
+      if (inputHorario.value) {
+        regra.horario = inputHorario.value;
+        saveNotificacoes(notificacoes);
+      }
+    });
+    campoHorario.appendChild(labelHorario);
+    campoHorario.appendChild(inputHorario);
+
+    campos.appendChild(campoDias);
+    campos.appendChild(campoHorario);
+
+    const remover = document.createElement('button');
+    remover.type = 'button';
+    remover.className = 'notif-remove';
+    remover.textContent = '×';
+    remover.title = 'Remover esta notificação';
+    remover.addEventListener('click', () => {
+      notificacoes = notificacoes.filter(r => r.id !== regra.id);
+      saveNotificacoes(notificacoes);
+      renderNotificacoesModal();
+    });
+
+    row.appendChild(campos);
+    row.appendChild(remover);
+    lista.appendChild(row);
+  });
+}
+
+$('#btnAdicionarNotificacao').addEventListener('click', () => {
+  notificacoes.push({ id: uid(), diasAntes: 1, horario: '09:00' });
+  saveNotificacoes(notificacoes);
+  renderNotificacoesModal();
+});
+
+/* ---------- Verificação e disparo ---------- */
+
+function loadNotificacoesEnviadas() {
+  try { return JSON.parse(localStorage.getItem(NOTIFICACOES_ENVIADAS_KEY)) || []; }
+  catch { return []; }
+}
+function saveNotificacoesEnviadas(lista) {
+  localStorage.setItem(NOTIFICACOES_ENVIADAS_KEY, JSON.stringify(lista));
+}
+
+function calcularDataHoraNotificacao(dataVencimentoISO, diasAntes, horario) {
+  const base = parseISO(dataVencimentoISO);
+  const alvo = new Date(base.getFullYear(), base.getMonth(), base.getDate() - diasAntes);
+  const [h, m] = horario.split(':').map(Number);
+  alvo.setHours(h, m, 0, 0);
+  return alvo;
+}
+
+function verificarNotificacoesPendentes() {
+  if (!suportaNotificacoes() || Notification.permission !== 'granted') return;
+  if (notificacoes.length === 0) return;
+
+  const agora = new Date();
+  const limiteAntigo = new Date(agora.getTime() - 3 * 24 * 60 * 60 * 1000); // ignora atrasos de mais de 3 dias
+  let enviadas = loadNotificacoesEnviadas();
+  let houveEnvio = false;
+
+  contas.filter(c => c.status === 'pendente').forEach((conta) => {
+    notificacoes.forEach((regra) => {
+      const alvo = calcularDataHoraNotificacao(conta.dataVencimento, regra.diasAntes, regra.horario);
+      if (alvo > agora || alvo < limiteAntigo) return;
+
+      const chave = `${conta.id}:${regra.id}:${alvo.getTime()}`;
+      if (enviadas.includes(chave)) return;
+
+      dispararNotificacaoConta(conta, regra);
+      enviadas.push(chave);
+      houveEnvio = true;
+    });
+  });
+
+  if (houveEnvio) {
+    // mantém só os últimos ~90 dias de histórico, pra não crescer pra sempre
+    const corte = agora.getTime() - 90 * 24 * 60 * 60 * 1000;
+    enviadas = enviadas.filter(chave => {
+      const partes = chave.split(':');
+      const ts = Number(partes[partes.length - 1]);
+      return Number.isFinite(ts) ? ts >= corte : true;
+    });
+    saveNotificacoesEnviadas(enviadas);
+  }
+}
+
+function dispararNotificacaoConta(conta, regra) {
+  const titulo = regra.diasAntes === 0
+    ? `Vence hoje: ${conta.nome}`
+    : `${conta.nome} vence em ${regra.diasAntes} dia${regra.diasAntes > 1 ? 's' : ''}`;
+  const corpo = `${conta.categoria} · ${formatValorOuIndefinido(conta.valorOriginal)} · vencimento ${formatDataBR(conta.dataVencimento)}`;
+
+  const mostrar = (registration) => {
+    const opcoes = {
+      body: corpo,
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: `conta-${conta.id}-${regra.id}`,
+    };
+    if (registration && registration.showNotification) {
+      registration.showNotification(titulo, opcoes);
+    } else {
+      try { new Notification(titulo, opcoes); } catch (err) { console.error(err); }
+    }
+  };
+
+  if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then(mostrar).catch(() => mostrar(null));
+  } else {
+    mostrar(null);
+  }
+}
+
+/* =========================================================
    RENDER GERAL
    ========================================================= */
 
@@ -1601,6 +1934,11 @@ refreshCategoriaSelects();
 renderTudo();
 inicializarFirebase();
 atualizarUINuvem();
+
+// Confere avisos de vencimento pendentes agora, e depois a cada 5 minutos
+// enquanto o app estiver aberto (não roda com o app totalmente fechado).
+verificarNotificacoesPendentes();
+setInterval(verificarNotificacoesPendentes, 5 * 60 * 1000);
 
 /* Registro do service worker (permite instalar como app / uso offline) */
 if ('serviceWorker' in navigator) {
