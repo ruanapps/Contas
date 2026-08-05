@@ -264,6 +264,7 @@ button, input, select, textarea {
   gap: 6px;
 }
 .conta-meta .recorrente-icon { color: var(--blue); }
+.conta-meta .cartao-icon { font-size: 11px; }
 
 .conta-valor {
   font-family: var(--font-mono);
@@ -494,6 +495,10 @@ button, input, select, textarea {
 .detalhe-recorrente[hidden] {
   display: none;
 }
+.detalhe-cartao {
+  color: var(--gold);
+  background: var(--gold-soft);
+}
 
 /* Form */
 .field { margin-bottom: 14px; }
@@ -537,6 +542,96 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.opcoes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.opcoes-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+.opcoes-item:hover { border-color: var(--surface-3); }
+.opcoes-item-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  width: 30px;
+  text-align: center;
+}
+.opcoes-item-texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.opcoes-item-texto strong { font-size: 14.5px; font-weight: 600; }
+.opcoes-item-texto small { font-size: 12px; color: var(--text-muted); }
+.opcoes-item-seta { font-size: 20px; color: var(--text-muted); flex-shrink: 0; }
+
+.notif-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+.notif-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.notif-row-fields {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.notif-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.notif-field input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 13.5px;
+  outline: none;
+}
+.notif-field input:focus { border-color: var(--gold); }
+.notif-remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 18px;
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.notif-remove:hover { background: var(--red-soft); }
+.notif-vazio {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 10px 0;
 }
 
 .backup-desc code {
@@ -623,9 +718,6 @@ button, input, select, textarea {
 .nuvem-status.sincronizando { color: var(--gold); }
 .nuvem-status.erro { color: var(--red); }
 
-#btnNuvem.logado { border-color: var(--green); color: var(--green); }
-#btnNuvem.sincronizando { border-color: var(--gold); color: var(--gold); }
-#btnNuvem.erro-sync { border-color: var(--red); color: var(--red); }
 
 .opcional-tag {
   color: var(--text-muted);
@@ -776,6 +868,13 @@ button, input, select, textarea {
   margin-top: 1px;
   flex-shrink: 0;
 }
+.checkbox-label small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  margin-top: 2px;
+  font-weight: 400;
+}
 
 .modal-actions {
   display: flex;
@@ -809,6 +908,7 @@ button, input, select, textarea {
 .btn-excluir-conta:hover { text-decoration: underline; }
 
 .modal-confirm { text-align: center; padding-bottom: 24px; }
+#modalConfirm { z-index: 200; }
 .modal-confirm p { font-size: 15px; margin: 8px 0 20px; line-height: 1.5; }
 
 /* Toast */
