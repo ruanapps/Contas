@@ -17,7 +17,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" async crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js" async crossorigin="anonymous"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js" async crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js" async crossorigin="anonymous"></script>
 <script src="firebase-config.js" async></script>
 </head>
 <body>
@@ -31,7 +30,8 @@
       <h1>Contas a Pagar</h1>
     </div>
     <div class="topbar-actions">
-      <button class="btn-icon" id="btnOpcoes" title="Opções" aria-label="Opções">⚙</button>
+      <button class="btn-icon" id="btnNuvem" title="Sincronização na nuvem" aria-label="Sincronização na nuvem">☁</button>
+      <button class="btn-icon" id="btnBackup" title="Backup local" aria-label="Backup local">⇅</button>
       <button class="btn-add" id="btnNovaConta" title="Nova conta" aria-label="Nova conta">+</button>
     </div>
   </header>
@@ -130,7 +130,6 @@
       <p id="detObs"></p>
     </div>
     <div class="detalhe-recorrente" id="detRecorrenteTag" hidden>↻ Conta recorrente</div>
-    <div class="detalhe-recorrente detalhe-cartao" id="detCartaoTag" hidden>💳 Pago com cartão — fora dos somatórios</div>
     <div class="modal-actions">
       <button class="btn-secondary" id="btnEditar">Editar</button>
       <button class="btn-primary" id="btnMarcarPago">Marcar como pago</button>
@@ -181,13 +180,6 @@
           <label for="fDataPagamento">Data de pagamento</label>
           <input type="date" id="fDataPagamento">
         </div>
-      </div>
-
-      <div class="field field-check" id="fPagoComCartaoWrap">
-        <label class="checkbox-label">
-          <input type="checkbox" id="fPagoComCartao">
-          <span>Pago com Cartão de Crédito <small>(não entra nos somatórios — a fatura conta depois, quando ela mesma vencer)</small></span>
-        </label>
       </div>
 
       <div class="field">
@@ -264,45 +256,10 @@
   </div>
 </div>
 
-<!-- MODAL: Opções (menu de configurações) -->
-<div class="modal-overlay" id="modalOpcoes" hidden>
-  <div class="modal modal-form">
-    <button class="modal-close" data-close>×</button>
-    <h2>Opções</h2>
-    <div class="opcoes-lista">
-      <button type="button" class="opcoes-item" id="btnAbrirNuvem">
-        <span class="opcoes-item-icon">☁</span>
-        <span class="opcoes-item-texto">
-          <strong>Sincronização na nuvem</strong>
-          <small>Entrar com Google/e-mail e sincronizar entre aparelhos</small>
-        </span>
-        <span class="opcoes-item-seta">›</span>
-      </button>
-      <button type="button" class="opcoes-item" id="btnAbrirBackup">
-        <span class="opcoes-item-icon">⇅</span>
-        <span class="opcoes-item-texto">
-          <strong>Backup local (Excel)</strong>
-          <small>Exportar ou importar uma planilha de backup</small>
-        </span>
-        <span class="opcoes-item-seta">›</span>
-      </button>
-      <button type="button" class="opcoes-item" id="btnAbrirNotificacoes">
-        <span class="opcoes-item-icon">🔔</span>
-        <span class="opcoes-item-texto">
-          <strong>Notificações</strong>
-          <small>Avisos personalizados sobre vencimentos</small>
-        </span>
-        <span class="opcoes-item-seta">›</span>
-      </button>
-    </div>
-  </div>
-</div>
-
 <!-- MODAL: Sincronização na nuvem -->
 <div class="modal-overlay" id="modalNuvem" hidden>
   <div class="modal modal-form">
     <button class="modal-close" data-close>×</button>
-    <button type="button" class="link-btn" data-voltar-opcoes>‹ Voltar às opções</button>
     <h2>Sincronização na nuvem</h2>
 
     <!-- Estado: Firebase não configurado neste app -->
@@ -361,7 +318,6 @@
 <div class="modal-overlay" id="modalBackup" hidden>
   <div class="modal modal-form">
     <button class="modal-close" data-close>×</button>
-    <button type="button" class="link-btn" data-voltar-opcoes>‹ Voltar às opções</button>
     <h2>Backup local</h2>
     <p class="backup-desc">
       Exporte todos os seus dados (contas, categorias e filtros) para uma planilha Excel,
@@ -373,29 +329,6 @@
       <button type="button" class="btn-secondary" id="btnImportarBackup">Importar planilha (.xlsx)</button>
       <input type="file" id="inputImportarBackup" accept=".xlsx" hidden>
     </div>
-  </div>
-</div>
-
-<!-- MODAL: Notificações -->
-<div class="modal-overlay" id="modalNotificacoes" hidden>
-  <div class="modal modal-form">
-    <button class="modal-close" data-close>×</button>
-    <button type="button" class="link-btn" data-voltar-opcoes>‹ Voltar às opções</button>
-    <h2>Notificações</h2>
-
-    <p class="backup-desc" id="notifPermissaoTexto">Verificando suporte do navegador...</p>
-    <button type="button" class="btn-secondary" id="btnAtivarNotificacoes" hidden>Ativar notificações</button>
-
-    <div class="notif-lista" id="notifLista"></div>
-
-    <button type="button" class="btn-filtro-novo" id="btnAdicionarNotificacao">+ Adicionar notificação</button>
-
-    <p class="backup-desc">
-      Os avisos são conferidos sempre que o app está aberto (em uso ou minimizado em segundo plano). Se o
-      aparelho ficar com o app totalmente fechado no horário exato, o aviso aparece assim que você abrir o
-      app de novo — como esta é uma versão sem servidor próprio, não é possível garantir o disparo com o app
-      100% fechado, como um aplicativo nativo faria.
-    </p>
   </div>
 </div>
 

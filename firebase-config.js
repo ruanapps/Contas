@@ -15,13 +15,6 @@
    Enquanto os valores abaixo não forem substituídos, a sincronização na
    nuvem fica desativada e o app continua funcionando 100% localmente,
    como antes.
-
-   "vapidKey": necessária só para as notificações PUSH (avisos mesmo com
-   o app fechado). Gerada em Configurações do projeto → Cloud Messaging
-   → aba "Web configuration" → "Web Push certificates" → "Generate key
-   pair". Veja o passo a passo completo em PUSH_NOTIFICACOES.md.
-   Sem ela, o resto do app (contas, sincronização, backup e as
-   notificações "com o app aberto") continua funcionando normalmente.
    ========================================================= */
 
 const firebaseConfig = {
@@ -31,5 +24,4 @@ const firebaseConfig = {
   storageBucket: "contas-c655b.firebasestorage.app",
   messagingSenderId: "825846387960",
   appId: "1:825846387960:web:7b28a2a431af81e744970d",
-  vapidKey: "COLE_AQUI_SUA_VAPID_KEY",
 };
